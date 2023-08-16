@@ -1,0 +1,56 @@
+<!-- System definition for i2c driver -->
+<!-- Matt Rossouw - matthew.rossouw@unsw.edu.au -->
+<!-- 2023 -->
+<?xml version="1.0" encoding="UTF-8"?>
+<system>
+    <!-- i2c hardware -->
+    <memory_region name="i2c" size="0x200_000" phys_addr="0xFF805000" page_size="0x200_000" cached="false"/>
+
+    <!-- Transfer channels server <-> driver -->
+    <memory_region name="m2-tokenbuf" size="0x20"/>
+    <memory_region name="m3-tokenbuf" size="0x20"/>
+
+    <!-- Shared ring buffer client <=> server -->
+
+
+    <!-- Main protection domain - i2c server -->
+    <protection_domain name="i2c-server" priority="205">
+        <program_image path="i2c-server.elf"/>
+
+        <!-- Server <=> driver buffers -->
+		<map mr="m2-tokenbuf" vaddr="0x4_000_000" perms="rw" setvar_vadr="m2-tokenbuf"/>
+        <map mr="m3-tokenbuf" vaddr="0x4_000_000" perms="rw" setvar_vadr="m3-tokenbuf"/>
+
+        <!-- Client <=> server ring buffer -->
+    </protection_domain>
+
+    <!-- i2c driver(s) -->
+    <protection_domain name="i2c-driver-m2" priority="201">
+        <program_image path="i2c-server.elf"/>
+        <irq irq="53" id="1"/>
+    </protection_domain>
+
+    <protection_domain name="i2c-driver-m3" priority="200">
+        <program_image path="i2c-server.elf"/>
+        
+        <!-- Main interrupt -->
+        <irq irq="71" id="1"/>
+
+        <!-- TO interrupt (timeout?) -->
+        <irq irq="126" id="2"/>
+    </protection_domain>
+
+    <!-- Client protection domain - for testing -->
+    <protection_domain name="client" priority="120">
+        <program_image path="client.elf"/>
+
+        <!-- Main interrupt -->
+        <irq irq="53" id="1"/>
+
+        <!-- TO interrupt (timeout?) -->
+        <irq irq="127" id="2"/>
+    </protection_domain>
+
+
+
+</system>
