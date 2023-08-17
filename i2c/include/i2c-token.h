@@ -13,8 +13,10 @@
 // Matt Rossouw (matthew.rossouw@unsw.edu.au)
 // 08/2023
 
-// This paradigm is stolen from the S905X3's I2C interface - it is a nice level of abstraction
-// however that should be very pleasant to translate to other interfaces.
+// This paradigm is based on the S905X3's I2C interface - it is a nice level of abstraction
+// however that should be very pleasant to translate to other interfaces. I extend this by
+// removing the need for separate read, write and token buffers allowing data to be stored in
+// 1D buffers indexed by libsharedringbuffer
 
 #ifndef I2C_TK_H
 #define I2C_TK_H
@@ -27,15 +29,15 @@ typedef uint8_t i2c_token_t;
 #define I2C_TK_ADDRW    0x2     // ADDRESS WRITE: Used to wake up the target device on the bus. Sets up
                                 //                any following DATA tokens to be writes.
 #define I2C_TK_ADDRR    0x3     // ADDRESS READ: Same as ADDRW but sets up DATA tokens as reads.
-#define I2C_TK_DATA     0x4     // DATA: Causes hardware to either read or write a byte to/from the read/write buffers.
+// 0x4 is skipped in case these #defines are accidentally used instead of the odroid ones
 #define I2C_TK_DATA_END 0x5     // DATA_LAST: Used for read transactions to write a NACK to alert the slave device
                                 //            that the read is now over.
 #define I2C_TK_STOP     0x6     // STOP: Used to send the STOP condition on the bus to end a transaction. 
                                 //       Causes master to release the bus.
 
-// Token buffer defines
-#define TOKEN_BUF_SZ    16      // Number of tokens to send to driver per engagement. Matches ODROID C4 hardware limit.
-#define DATA_RD_BUF_SZ  8       // Number of bytes in the read buffer associated with the token buffer. Matches ODROID C4 hardware limit.
-#define DATA_WR_BUF_SZ  8       // Number of bytes in the write buffer associated with the token buffer. Matches ODROID C4 hardware limit.
+#define I2C_TK_DAT     0x37     // Read or write one byte - the byte after this is treated as payload.
+
+#define I2C_TK_DAT(X) (I2C_TK_DAT + (X))// Read or write X bytes. The X bytes succeeding this in the chain
+                                        // are treated as the payload. Max payload: 200 bytes
 
 #endif
