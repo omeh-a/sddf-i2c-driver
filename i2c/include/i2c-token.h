@@ -19,6 +19,9 @@
 #ifndef I2C_TK_H
 #define I2C_TK_H
 
+#include <stdint.h>
+typedef uint8_t i2c_token_t;
+
 #define I2C_TK_END      0x0     // END: Terminator for token list, has no meaning to hardware otherwise
 #define I2C_TK_START    0x1     // START: Begin an i2c transfer. Causes master device to capture bus.
 #define I2C_TK_ADDRW    0x2     // ADDRESS WRITE: Used to wake up the target device on the bus. Sets up
