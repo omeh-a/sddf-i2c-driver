@@ -26,10 +26,33 @@ uintptr_t m2_ret_used;
 uintptr_t m3_ret_free;
 uintptr_t m3_ret_used;
 
+// Hardware memory
+uintptr_t i2c;
 
+/**
+ * Initialise the i2c master interfaces.
+*/
+static inline void setupi2c(void) {
+    uint32_t m2ctl = *((uint32_t *)I2C_M2_CTL + i2c);
+    uint32_t m3ctl = *((uint32_t *)I2C_M3_CTL + i2c);
+
+    // Initialise fields
+    m2ctl = m2ctl & ~(0x80000000)   // Disable gated clocks
+    m3ctl = m3ctl & ~(0x80000000)
+    m2ctl = m2ctl & ~(0x30000000)   // Disabled extended clock divider
+    m3ctl = m3ctl & ~(0x30000000)
+    m2ctl = m2ctl & ~(0x01000000)   // Clear manual SDA line level
+    m3ctl = m3ctl & ~(0x01000000)
+    m2ctl = m2ctl & ~(0x00C00000)   // Disable manual mode, clear manual SCL level
+    m3ctl = m3ctl & ~(0x00C00000)
+    m2ctl = m2ctl |  (0x003FF000)   // Set quarter clock delay to default clock speed
+    m3ctl = m3ctl |  (0x003FF000)
+    m2ctl = m2ctl & ~(0x00000003)   // Disable ACK IGNORE and set list processor to paused.
+    m3ctl = m3ctl & ~(0x00000003)
+}
 
 void init(void) {
-
+    setupi2c();
 }
 
 /**
