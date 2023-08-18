@@ -14,4 +14,12 @@
 
 #define DRIVER_NOTIFY_ID 1  // Matching i2c.system
 
+
+// PPC idenitifers
+#define I2C_PPC_REQTYPE 1
+#define I2C_PPC_CLAIM 1
+#define I2C_PPC_RELEASE 2
+
+
+
 #endif

@@ -75,5 +75,18 @@ void notified(sel4cp_channel c) {
  * Protected procedure calls into this server are used for security. 
 */
 sel4cp_message protected(sel4cp_channel c, sel4cp_message m) {
+    // Determine the type of request
+    uint64_t req = sel4cp_mr_get(I2C_PPC_REQTYPE);
+    uint64_t arg1 = sel4cp_mr_get(1);   // Bus
+    uint64_t arg2 = sel4cp_mr_get(2);   // Address
+    switch (req) {
+        case I2C_PPC_CLAIM:
+            // Claim an address
+            break;
+        case I2C_PPC_RELEASE:
+            // Release an address
+            break;
+    }
 
+    return sel4cp_msginfo_new(0, 0);
 }
