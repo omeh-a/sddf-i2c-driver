@@ -1,6 +1,6 @@
 # sddf-i2c-driver
 
-This repo contains an i2c (inter-integrated-circuit) driver for the ODROID C4 Single Board Computer built over the seL4 Device Driver Framework.
+This repo contains an i2c (inter-integrated-circuit) driver for the ODROID C4 Single Board Computer built over the seL4 Device Driver Framework. This repo is structured to be as generic as possible for future extension to other devices.
 
 The initial scope of this driver is to supply an interface to the EE domain i2c controllers on the c4. The ODROID has four interfaces:
 
@@ -11,7 +11,66 @@ The initial scope of this driver is to supply an interface to the EE domain i2c 
 
 All interfaces can operate both in controller (formerly master) and target (formerly slave) mode. We choose to only expose two interfaces as m2 and m3 since the others are not available via external GPIO on the ODROID C4.
 
-Initially, we effectively ignore the AO domain option for homogeneity (we also will never run this code with EE disabled). This driver is intended to operate the demo system for the [KISS OS](https://github.com/au-ts/kiss) where it will operate the touchscreen and NFC devices. Each connects on a separate interface due to the design of the ODROID VU7 touchscreen making wiring difficult.
+Initially, we effectively ignore the AO domain option for homogeneity (we also will never run this code with EE disabled). This driver is intended to operate the demo system for the [KISS OS](https://github.com/au-ts/kiss) where it will operate the touchscreen and NFC devices.
+
+## Design
+
+This repository presents a single-driver single-server structure for handling the i2c interfaces on a device, assuming a uniform set of i2c interfaces.
+
+### Server
+
+The server acts as the target for API calls from clients and has two responsibilites:
+
+* Multiplexing: given various client requests, delegate them to the driver and return results back to the correct caller.
+* Security: i2c devices are a colossal security risk if not protected. The driver ensures that the requesting client has been provisioned access to the requested bus and address.
+
+The server accepts requests in the form of a chain of 8-bit tokens, prepended with the address the clients wishes to target. **Each transaction chain can only target a single address** - this is adequate for a majority of i2c perpipherals however; very few require multi-address calls in a single transaction. This constraint is to guarantee O(1) rejection of inauthentic requests.
+
+Clients interface with the server via a shared memory region, passing data into and out of ring buffers. The server determines if these requests are authentic before copying data into the server<=>driver transport layer.
+
+### Driver
+
+The driver is responsible for hardware interaction. It directly interacts with the i2c hardware via DMA and is responsible for disassembling the requests from the server into a format which is appropriate for hardware. The token-chain abstraction is very friendly however and as a result translation is minimal. This driver can support many different separate interfaces, each with:
+
+* A unique I2C list processor / data FIFO,
+* A unique interrupt path for data completion.
+
+Since each interface is effectively a unique device, a set of ring buffers for RX and TX is required **per interface** between the driver and server. These operate completely independently.
+
+Transactions are broken into the maximum unit acceptable by hardware before yielding. E.g. for the ODROID C4 16 tokens can be processed at any time, so the driver splits a list of n tokens into ceil(n/16) operations. Upon receiving a "processing complete" IRQ the next unit is processed.
+
+Once the full transaction has been processed, the server is notified to return data to the client.
+
+Upon each invokation of the driver, ring buffers for all interfaces are processed before sleeping to avoid multiplying context switches.
+
+### Security
+
+Security is currently enforced in a "first-come-first-serve" mode - clients can claim or release an address on a particular bus via a protected procedure call (PPC) to the server. Presently, only one device is allowed access to each address and the server can accept up to 128 claims per interface (allowing one device for every 7-bit address).
+
+### Transport layer
+
+Communication between clients and the server, as well as the server and the clients, is implemented using [libsharedringbuffer](https://github.com/au-ts/sDDF/tree/restructure/network/libethsharedringbuffer) from the seL4 Device Driver Framework.
+
+### Tokenisation
+
+In transport all i2c operations are decomposed into a list of tokens for more compact handling. i2c has only a few core operations that need expression:
+
+* Write n bytes to an address on the bus,
+* Read n bytes to an address on the bus,
+* Variations upon the above which do not terminate the transaction.
+
+All i2c transactions begin with a START bit followed by an address + R/W bit sent on the bus. The most significant bit of the address determines R/W. Once the target acknowledges the address call, succeeding bytes are treated as DATA until an END condition is signalled, a repeated start condition + new address is sent, or a NACK is sent to terminate a read preceding another read or write.
+
+A token-based abstraction is already used in the ODROID C4 hardware, but we take it a step further by flattening data into the token stream too, for easier buffering. The tokens are defined as follows:
+
+* `I2C_TK_END` - Terminator for token lists; has no effect besides to indicate further bytes are invalid.
+* `I2C_TK_START` - Triggers hardware to signal the START condition on the bus, claiming it.
+* `I2C_TK_ADDRW` - Transmit a 7 bit address with a WRITE condition.
+* `I2C_TK_ADDRR` - Transmit a 7 bit address with a READ condition.
+* `I2C_TK_DATA_END` - Transmit a NACK to indicate to the target that we are done reading, if a read was in effect. Required to prevent target from staying in read mode.
+* `I2C_TK_STOP` - Triggers hardware to signal the END condition on the bus, releasing it.
+* `I2C_TK_DAT` - Transmits or receives a byte of data - the next byte after this token is treated as the payload to send under a WRITE condition, otherwise under a READ condition the subsequent byte should be another token which is processed normally.
+* `I2C_TK_DAT(X)` - Transmits or receives X bytes of data - the next X bytes are treated as a payload under WRITE conditions, otherwise the next byte is a token. X is valid between 1 and 200.
 
 ## i2c specifications
 
