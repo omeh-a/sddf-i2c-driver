@@ -6,51 +6,96 @@
     <!-- i2c hardware -->
     <memory_region name="i2c" size="0x200_000" phys_addr="0xFF805000" page_size="0x200_000" cached="false"/>
 
+    <!-- Shared ring buffers -->
     <!-- Transfer channels server <-> driver -->
-    <memory_region name="m2-tokenbuf" size="0x20"/>
-    <memory_region name="m3-tokenbuf" size="0x20"/>
+    <memory_region name="m2_req_free" size="0x1000"/>
+    <memory_region name="m2_req_used" size="0x1000"/>
+    <memory_region name="m2_ret_free" size="0x1000"/>
+    <memory_region name="m2_ret_used" size="0x1000"/>
+    <memory_region name="m3_req_free" size="0x1000"/>
+    <memory_region name="m3_req_used" size="0x1000"/>
+    <memory_region name="m3_ret_free" size="0x1000"/>
+    <memory_region name="m3_ret_used" size="0x1000"/>
 
-    <!-- Shared ring buffer client <=> server -->
-
+    <!-- Transfer channels client <=> server -->
+    <memory_region name="client_req_free" size="0x1000"/>
+    <memory_region name="client_req_used" size="0x1000"/>
+    <memory_region name="client_ret_free" size="0x1000"/>
+    <memory_region name="client_ret_used" size="0x1000"/>
 
     <!-- Main protection domain - i2c server -->
-    <protection_domain name="i2c-server" priority="205">
-        <program_image path="i2c-server.elf"/>
+    <protection_domain name="i2c_server" priority="205">
+        <program_image path="i2c.elf"/>
 
         <!-- Server <=> driver buffers -->
-		<map mr="m2-tokenbuf" vaddr="0x4_000_000" perms="rw" setvar_vadr="m2-tokenbuf"/>
-        <map mr="m3-tokenbuf" vaddr="0x4_000_000" perms="rw" setvar_vadr="m3-tokenbuf"/>
+		<map mr="m2_req_free" vaddr="0x4_000_000" perms="rw" setvar_vaddr="m2_req_free"/>
+        <map mr="m2_req_used" vaddr="0x4_001_000" perms="rw" setvar_vaddr="m2_req_used"/>
+        <map mr="m3_req_free" vaddr="0x4_002_000" perms="rw" setvar_vaddr="m3_req_free"/>
+        <map mr="m3_req_used" vaddr="0x4_003_000" perms="rw" setvar_vaddr="m3_req_used"/>
+
+        <map mr="m2_ret_free" vaddr="0x4_004_000" perms="rw" setvar_vaddr="m2_ret_free"/>
+        <map mr="m2_ret_used" vaddr="0x4_005_000" perms="rw" setvar_vaddr="m2_ret_used"/>
+        <map mr="m3_ret_free" vaddr="0x4_006_000" perms="rw" setvar_vaddr="m3_ret_free"/>
+        <map mr="m3_ret_used" vaddr="0x4_007_000" perms="rw" setvar_vaddr="m3_ret_used"/>
 
         <!-- Client <=> server ring buffer -->
+        <map mr="client_req_free" vaddr="0x4_008_000" perms="rw" setvar_vaddr="client_req_free"/>
+        <map mr="client_req_used" vaddr="0x4_009_000" perms="rw" setvar_vaddr="client_req_used"/>
+        <map mr="client_ret_free" vaddr="0x4_00A_000" perms="rw" setvar_vaddr="client_ret_free"/>
+        <map mr="client_ret_used" vaddr="0x4_00B_000" perms="rw" setvar_vaddr="client_ret_used"/>
     </protection_domain>
 
-    <!-- i2c driver(s) -->
-    <protection_domain name="i2c-driver-m2" priority="201">
-        <program_image path="i2c-server.elf"/>
-        <irq irq="53" id="1"/>
-    </protection_domain>
+    <!-- i2c driver -->
+    <protection_domain name="i2c_driver" priority="201">
+        <program_image path="i2c_driver.elf"/>
 
-    <protection_domain name="i2c-driver-m3" priority="200">
-        <program_image path="i2c-server.elf"/>
-        
+        <!-- Server <=> driver buffers -->
+		<map mr="m2_req_free" vaddr="0x4_000_000" perms="rw" setvar_vaddr="m2_req_free"/>
+        <map mr="m2_req_used" vaddr="0x4_001_000" perms="rw" setvar_vaddr="m2_req_used"/>
+        <map mr="m3_req_free" vaddr="0x4_002_000" perms="rw" setvar_vaddr="m3_req_free"/>
+        <map mr="m3_req_used" vaddr="0x4_003_000" perms="rw" setvar_vaddr="m3_req_used"/>
+
+        <map mr="m2_ret_free" vaddr="0x4_004_000" perms="rw" setvar_vaddr="m2_ret_free"/>
+        <map mr="m2_ret_used" vaddr="0x4_005_000" perms="rw" setvar_vaddr="m2_ret_used"/>
+        <map mr="m3_ret_free" vaddr="0x4_006_000" perms="rw" setvar_vaddr="m3_ret_free"/>
+        <map mr="m3_ret_used" vaddr="0x4_007_000" perms="rw" setvar_vaddr="m3_ret_used"/>
+
+        <!-- M2 IRQs -->
         <!-- Main interrupt -->
-        <irq irq="71" id="1"/>
+        <irq irq="53" id="1"/>
 
         <!-- TO interrupt (timeout?) -->
-        <irq irq="126" id="2"/>
+        <irq irq="127" id="2"/>
+
+
+        <!-- M3 IRQs -->
+        <!-- Main interrupt -->
+        <irq irq="71" id="3"/>
+
+        <!-- TO interrupt (timeout?) -->
+        <irq irq="126" id="4"/>
     </protection_domain>
 
     <!-- Client protection domain - for testing -->
     <protection_domain name="client" priority="120">
         <program_image path="client.elf"/>
 
-        <!-- Main interrupt -->
-        <irq irq="53" id="1"/>
-
-        <!-- TO interrupt (timeout?) -->
-        <irq irq="127" id="2"/>
+        <!-- Client <=> server ring buffer -->
+        <map mr="client_req_free" vaddr="0x4_008_000" perms="rw" setvar_vaddr="client_req_free"/>
+        <map mr="client_req_used" vaddr="0x4_009_000" perms="rw" setvar_vaddr="client_req_used"/>
+        <map mr="client_ret_free" vaddr="0x4_00A_000" perms="rw" setvar_vaddr="client_ret_free"/>
+        <map mr="client_ret_used" vaddr="0x4_00B_000" perms="rw" setvar_vaddr="client_ret_used"/>
     </protection_domain>
 
+    <!-- Driver<=>Server notification interface -->
+    <channel>
+        <end pd="i2c_server" id="1"/>
+        <end pd="i2c_driver" id="1"/>
+    </channel>
 
-
+    <!-- Server<=>Client notification interface -->
+    <channel>
+        <end pd="i2c_server" id="2"/>
+        <end pd="client" id="1"/>
+    </channel>
 </system>

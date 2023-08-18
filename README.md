@@ -72,7 +72,18 @@ A token-based abstraction is already used in the ODROID C4 hardware, but we take
 * `I2C_TK_DAT` - Transmits or receives a byte of data - the next byte after this token is treated as the payload to send under a WRITE condition, otherwise under a READ condition the subsequent byte should be another token which is processed normally.
 * `I2C_TK_DAT(X)` - Transmits or receives X bytes of data - the next X bytes are treated as a payload under WRITE conditions, otherwise the next byte is a token. X is valid between 1 and 200.
 
-## i2c specifications
+### Error handling
+
+The return buffers between the driver and server are used for both data and errors. The first two bytes are returned for an ERROR and TOKEN, the third and fourth are reserved for PD and ADDR.
+
+```
+| 0x0 | 0x1 | 0x2 | 0x3 | 0x4 | ... | 0xN |
+| ERR | TOK | PD  | ADR | DAT | DAT | DAT |
+```
+
+ERR is zero for no error, otherwise it is an error code depending on the particular failure. TOK contains the index of the token in this transaction that caused the issue. Return chains are identified by a **cookie**.
+
+## ODROID C4 i2c specifications
 
 For this iteration of this driver:
 

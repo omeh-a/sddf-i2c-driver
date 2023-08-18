@@ -48,4 +48,10 @@
 #define OC4_I2C_TK_STOP     0x6     // STOP: Used to send the STOP condition on the bus to end a transaction. 
                                     //       Causes master to release the bus.
 
+// IRQs IDs (matching i2c.system)
+#define IRQ_I2C_M2 1
+#define IRQ_I2C_M2_TO 2
+#define IRQ_I2C_M3 3
+#define IRQ_I2C_M3_TO 4
+
 #endif

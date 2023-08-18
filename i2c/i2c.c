@@ -14,6 +14,23 @@
 #include "i2c-token.h"
 #include "i2c-driver.c"
 #include "shared_ringbuffer.h"
+#include "i2c.h"
+
+// Shared memory regions
+uintptr_t m2_req_free;
+uintptr_t m2_req_used;
+uintptr_t m3_req_free;
+uintptr_t m3_req_used;
+
+uintptr_t m2_ret_free;
+uintptr_t m2_ret_used;
+uintptr_t m3_ret_free;
+uintptr_t m3_ret_used;
+
+uintptr_t client_req_free;
+uintptr_t client_req_used;
+uintptr_t client_ret_free;
+uintptr_t client_ret_used;
 
 // Security lists: one for each possible bus.
 i2c_security_list_t security_list0[I2C_SECURITY_LIST_SZ];
@@ -34,10 +51,23 @@ void init(void) {
     }
 }
 
+/**
+ * Handler for notification from the driver. Driver notifies when
+ * there is data to retrieve from the return path.
+*/
+static inline void driverNotify(void) {
+
+}
+
 
 void notified(sel4cp_channel c) {
     switch (c) {
-
+        case DRIVER_NOTIFY_ID:
+            driverNotify();
+            break;
+        case 2:
+            // Client 1
+            break;
     }
 }
 
