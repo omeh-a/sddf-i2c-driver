@@ -15,19 +15,32 @@
 #include "odroidc4-i2c-mem.h"
 #include <stdint.h>
 
-// Shared memory regions
-uintptr_t m2_req_free;
-uintptr_t m2_req_used;
-uintptr_t m3_req_free;
-uintptr_t m3_req_used;
-
-uintptr_t m2_ret_free;
-uintptr_t m2_ret_used;
-uintptr_t m3_ret_free;
-uintptr_t m3_ret_used;
 
 // Hardware memory
 uintptr_t i2c;
+
+
+/**
+ * Given a bus number, retrieve the error code stored in the control register
+ * associated.
+ * @param bus i2c EE-domain master interface to check
+ * @return int error number - non-negative numbers are a success with n. bytes read / 0 if writing,
+ *         while a negative value corresponds to a bus NACK at a token of value -(ret).
+ *         e.g. if NACK on a ADDRW (0x3) the return value will be -3.
+ */
+static inline int i2cGetError(int bus) {
+    // Index into ctl register - i2c base + address of appropriate register
+    uint32_t ctl = ((uint32_t *)i2c + ((bus == 2) ? OC4_M2_CTL : OC4_M3_CTL));
+    uint8_t err = ctl & 0x80;   // bit 3 -> set if error
+    uint8_t rd = ctl & 0xF00 // bits 8-11 -> number of bytes read
+    uint8_t tok = ctl & 0xF0 // bits 4-7 -> curr token
+
+    if (err) {
+        return -tok;
+    } else {
+        return rd;
+    }
+}
 
 /**
  * Initialise the i2c master interfaces.
@@ -60,8 +73,8 @@ void init(void) {
  * checking ring buffers and dispatching requests to appropriate
  * interfaces.
 */
-static inline void serverNotified(void) {
-
+static inline void serverNotify(void) {
+    // Check if data is available
 }
 
 /**
@@ -95,7 +108,7 @@ static inline void irqm3_to(void) {
 void notified(sel4cp_channel c) {
     switch (c) {
         case SERVER_NOTIFY_ID:
-            serverNotified();
+            serverNotify();
             break;
         case IRQ_I2C_M2:
             irqm2();

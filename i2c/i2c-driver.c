@@ -13,7 +13,4 @@
 #include "i2c-odroid-c4.c"
 // Generic driver for implementation reference
 #else
-
-
-
 #endif

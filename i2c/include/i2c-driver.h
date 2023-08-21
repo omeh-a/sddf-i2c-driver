@@ -36,4 +36,7 @@ typedef i2c_addr_t i2c_security_list_t;
 #include "i2c-token.h"
 #define SERVER_NOTIFY_ID 1
 
+// Ring buffer interaction functions
+
+
 #endif
