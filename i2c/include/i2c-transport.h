@@ -48,25 +48,28 @@ req_buf_ptr_t allocReqBuf(int bus, size_t size, uint8_t *data, uint8_t client, u
 
 /**
  * Allocate a return buffer to get data back to the server from the driver, given a
- * i2c master interface (bus). This function loads the data into the buffer.
- * 
- * The first two bytes of the buffer are used to store the client ID and address, 
- * while the third byte stores either a negative error code, zero, or the number of
- * bytes read from the device. 
- * 
+ * i2c master interface (bus). The buffer is just allocated and does not get moved
+ * into the used queue by this function, unlike `allocReqBuf`.
  * Address and client are used to demultiplex by the server.
  * 
  * @note Expects that data is properly formatted with END token terminator.
  * 
  * @param bus: EE domain i2c master interface number
- * @param size: Size of the data to be loaded into the buffer. Max I2C_BUF_SZ
- * @param data: Pointer to the data to be loaded into the buffer
- * @param client: Protection domain of the client who requested this.
- * @param addr: 7-bit I2C address used for the transaction
- * @param status: Status of the transaction - negative error code, zero, or number of bytes read
+
  * @return Pointer to the buffer allocated for this request
 */
-ret_buf_ptr_t allocRetBuf(int bus, size_t size, uint8_t *data, uint8_t client, uint8_t addr, uint8_t status);
+ret_buf_ptr_t getRetBuf(int bus);
+
+/**
+ * Push a return buffer back to the server for a specified i2c master interface (bus).
+ * This should only operate on the buffers given by `allocRetBuf`.
+ * 
+ * @param bus: EE domain i2c master interface number
+ * @param buf: Pointer to the buffer to be pushed back to the server
+ * @param sz: Size of the buffer to be pushed back to the server
+ * @return 0 on success
+*/
+int pushRetBuf(int bus, req_buf_ptr_t buf, size_t sz);
 
 /**
  * Pop a return buffer from the server for a specified i2c master interface (bus).
@@ -80,4 +83,7 @@ req_buf_ptr_t popReqBuf(int bus, size_t *size);
  * @return Pointer to buffer containing data from the driver.
 */
 ret_buf_ptr_t popRetBuf(int bus, size_t *size);
+
+int retBufEmpty(int bus);
+int reqBufEmpty(int bus);
 #endif

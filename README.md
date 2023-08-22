@@ -70,7 +70,7 @@ A token-based abstraction is already used in the ODROID C4 hardware, but we take
 * `I2C_TK_DATA_END` - Transmit a NACK to indicate to the target that we are done reading, if a read was in effect. Required to prevent target from staying in read mode.
 * `I2C_TK_STOP` - Triggers hardware to signal the END condition on the bus, releasing it.
 * `I2C_TK_DAT` - Transmits or receives a byte of data - the next byte after this token is treated as the payload to send under a WRITE condition, otherwise under a READ condition the subsequent byte should be another token which is processed normally.
-* `I2C_TK_DAT(X)` - Transmits or receives X bytes of data - the next X bytes are treated as a payload under WRITE conditions, otherwise the next byte is a token. X is valid between 1 and 200.
+* `I2C_TK_DAT(X)` - Transmits or receives X bytes of data - the next X bytes are treated as a payload under WRITE conditions, otherwise the next byte is a token. X is valid between 1 and 8.
 
 ### Error handling
 

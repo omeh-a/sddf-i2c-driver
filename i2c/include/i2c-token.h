@@ -38,6 +38,6 @@ typedef uint8_t i2c_token_t;
 #define I2C_TK_DAT     0x37     // Read or write one byte - the byte after this is treated as payload.
 
 #define I2C_TK_DAT(X) (I2C_TK_DAT + (X))// Read or write X bytes. The X bytes succeeding this in the chain
-                                        // are treated as the payload. Max payload: 200 bytes
+                                        // are treated as the payload. Max payload: 8 bytes
 
 #endif

@@ -90,14 +90,14 @@ req_buf_ptr_t allocReqBuf(int bus, size_t size, uint8_t *data, uint8_t client, u
     // Enqueue the buffer
     ret = enqueue_used(ring, buf, size + 2*sizeof(uint8_t));
     if (ret != 0) {
-        enqueue_free(ring, buf, size);
+        enqueue_free(ring, buf, I2C_BUF_SZ);
         return 0;
     }
     
     return buf;
 }
 
-ret_buf_ptr_t allocRetBuf(int bus, size_t size, uint8_t *data, uint8_t client, uint8_t addr, uint8_t status) {
+ret_buf_ptr_t getRetBuf(int bus, size_t size) {
     if (bus != 2 && bus != 3) {
         return 0;
     }
@@ -118,33 +118,36 @@ ret_buf_ptr_t allocRetBuf(int bus, size_t size, uint8_t *data, uint8_t client, u
     if (ret != 0) {
         return 0;
     }
+    return buf;
+}
 
-    // Load the client ID and i2c address into first two bytes of buffer
-    *(uint8_t *) buf = client;
-    *(uint8_t *) (buf + sizeof(uint8_t)) = addr;
-
-    // Load third byte with status
-    *(uint8_t *) (buf + 2*sizeof(uint8_t)) = status;
-
-    // Copy the data into the buffer
-    memcpy((void *) buf + 3*sizeof(uint8_t), data, size);
-
-    // Enqueue the buffer
-    ret = enqueue_used(ring, buf, size + 3*sizeof(uint8_t));
-    if (ret != 0) {
-        enqueue_free(ring, buf, size);
+req_buf_ptr_t pushRetBuf(int bus, req_buf_ptr_t buf, size_t size) {
+    if (bus != 2 && bus != 3) {
+        return 0;
+    }
+    if (size > I2C_BUF_SZ || !buf) {
         return 0;
     }
     
-    return buf;
+    // Allocate a buffer from the appropriate ring
+    ring_handle_t *ring;
+    if (bus == 2) {
+        ring = &m2RetRing;
+    } else {
+        ring = &m3ReRing;
+    }
+
+    // Enqueue the buffer
+    ret = enqueue_used(ring, (uintptr_t)buf, size);
+    if (ret != 0) {
+        return 0;
+    }
 }
 
 static inline uintptr_t popBuf(ring_handle_t *ring, size_t *sz) {
     uintptr_t buf;
     int ret = dequeue_used(ring, &buf, &size);
-    if (ret != 0) {
-        return 0;
-    }
+    if (ret != 0) return 0
     return buf;
 } 
 
@@ -177,4 +180,32 @@ ret_buf_ptr_t popRetBuf(int bus, size_t *size) {
         ring = &m3RetRing;
     }
     return (ret_buf_ptr_t) popBuf(ring, size);
+}
+
+int retBufEmpty(int bus) {
+    if (bus != 2 && bus != 3) {
+        return 0;
+    }
+
+    ring_handle_t *ring;
+    if (bus == 2) {
+        ring = &m2RetRing;
+    } else {
+        ring = &m3RetRing;
+    }
+    return ring_empty(ring);
+}
+
+int reqBufEmpty(int bus) {
+    if (bus != 2 && bus != 3) {
+        return 0;
+    }
+
+    ring_handle_t *ring;
+    if (bus == 2) {
+        ring = &m2ReqRing;
+    } else {
+        ring = &m3ReqRing;
+    }
+    return ring_empty(ring);
 }
