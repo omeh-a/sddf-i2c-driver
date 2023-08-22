@@ -72,12 +72,12 @@ ret_buf_ptr_t allocRetBuf(int bus, size_t size, uint8_t *data, uint8_t client, u
  * Pop a return buffer from the server for a specified i2c master interface (bus).
  * @return Pointer to buffer containing request from the server.
 */
-req_buf_ptr_t popReqBuf(int bus);
+req_buf_ptr_t popReqBuf(int bus, size_t *size);
 
 
 /**
  * Pop a return buffer from the driver to be returned to the clients.
  * @return Pointer to buffer containing data from the driver.
 */
-ret_buf_ptr_t popRetBuf(int bus);
+ret_buf_ptr_t popRetBuf(int bus, size_t *size);
 #endif

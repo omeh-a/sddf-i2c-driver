@@ -6,8 +6,8 @@
 
 // i2c-transport.c
 // Transport layer for sDDF i2c drivers. Manages all shared ring buffers.
-// This module is only used by the *driver* - the server explicitly manages
-// getting data into and out of the ring buffers for its operations.
+// This module is imported by both the driver and server. Note that we expect
+// the server to be responsible for initialising the buffers.
 // Matt Rossouw (matthew.rossouw@unsw.edu.au)
 // 08/2023
 
@@ -74,7 +74,8 @@ req_buf_ptr_t allocReqBuf(int bus, size_t size, uint8_t *data, uint8_t client, u
         ring = &m3ReqRing;
     }
     uintptr_t buf;
-    int ret = dequeue_free(ring, &buf, size);
+    int sz;
+    int ret = dequeue_free(ring, &buf, &sz);
     if (ret != 0) {
         return 0;
     }
@@ -100,7 +101,7 @@ ret_buf_ptr_t allocRetBuf(int bus, size_t size, uint8_t *data, uint8_t client, u
     if (bus != 2 && bus != 3) {
         return 0;
     }
-    if (size > I2C_BUF_SZ - 2*sizeof(i2c_token_t)) {
+    if (size > I2C_BUF_SZ - 3*sizeof(i2c_token_t)) {
         return 0;
     }
     
@@ -112,7 +113,8 @@ ret_buf_ptr_t allocRetBuf(int bus, size_t size, uint8_t *data, uint8_t client, u
         ring = &m3ReRing;
     }
     uintptr_t buf;
-    int ret = dequeue_free(ring, &buf, size);
+    int sz;
+    int ret = dequeue_free(ring, &buf, &sz);
     if (ret != 0) {
         return 0;
     }
@@ -135,4 +137,44 @@ ret_buf_ptr_t allocRetBuf(int bus, size_t size, uint8_t *data, uint8_t client, u
     }
     
     return buf;
+}
+
+static inline uintptr_t popBuf(ring_handle_t *ring, size_t *sz) {
+    uintptr_t buf;
+    int ret = dequeue_used(ring, &buf, &size);
+    if (ret != 0) {
+        return 0;
+    }
+    return buf;
+} 
+
+req_buf_ptr_t popReqBuf(int bus, size_t *size) {
+    if (bus != 2 && bus != 3) {
+        return 0;
+    }
+
+    // Allocate a buffer from the appropriate ring
+    ring_handle_t *ring;
+    if (bus == 2) {
+        ring = &m2ReqRing;
+    } else {
+        ring = &m3ReqRing;
+    }
+    return (req_buf_ptr_t) popBuf(ring, size);
+}
+
+
+ret_buf_ptr_t popRetBuf(int bus, size_t *size) {
+    if (bus != 2 && bus != 3) {
+        return 0;
+    }
+
+    // Allocate a buffer from the appropriate ring
+    ring_handle_t *ring;
+    if (bus == 2) {
+        ring = &m2RetRing;
+    } else {
+        ring = &m3RetRing;
+    }
+    return (ret_buf_ptr_t) popBuf(ring, size);
 }
