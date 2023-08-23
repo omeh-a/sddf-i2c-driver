@@ -72,7 +72,7 @@ void notified(sel4cp_channel c) {
 }
 
 /**
- * Protected procedure calls into this server are used for security. 
+ * Protected procedure calls into this server are used managing the security lists. 
 */
 sel4cp_message protected(sel4cp_channel c, sel4cp_message m) {
     // Determine the type of request

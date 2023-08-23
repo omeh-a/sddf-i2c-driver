@@ -313,8 +313,11 @@ static inline void i2cirq(int bus, int timeout) {
     // If request is completed or there was an error, return data to server and notify.
     if (err < 0 || !i2c_ifState[bus].remaining) {
         pushRetBuf(bus, i2c_ifState[bus].current_ret, i2c_ifState[bus].current_req_len);
+        i2c_ifState[bus].current_ret = NULL;
+        releaseReqBuf(bus, i2c_ifState[bus].current_req);
         i2c_ifState[bus].current_req = 0x0;
         i2c_ifState[bus].current_req_len = 0;
+        sel4cp_notify(SERVER_NOTIFY_ID);
     }
 
     // If the driver was notified while this transaction was in progress, immediately start working on the next one.
