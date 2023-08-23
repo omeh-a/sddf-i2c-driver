@@ -27,16 +27,11 @@ typedef struct _i2c_ifState {
     int current_req_len;        // Number of bytes in current request.
     int remaining;              // Number of bytes remaining to dispatch.
     int notified;               // Flag indicating that there is more work waiting.
-    uint8_t dat_index;          // Index into a DAT operation if it was only partially
-                                // completed.
+    int ddr;                    // Data direction. 0 = write, 1 = read.
 } i2c_ifState_t;
 
 // Driver state for each interface
 i2c_ifState_t i2c_ifState[4];
-// int notified = 0;   // Flag indicating notifications were ignored due to
-//                     // the driver being busy. If set, the driver needs to pull data
-//                     // out of the ring buffers this many times before more data can be
-//                     // accepted. This flag has to remain set until all ring buffers are empty.
 
 
 /**
@@ -91,8 +86,10 @@ static inline int i2cLoadTokens(int bus) {
     addr_reg = addr_reg | (addr << 1);  // i2c hardware expects that the 7-bit address is shifted left by 1
 
     // Load tokens into token registers, data into data registers
-    uint32_t tk_reg = ((uint32_t *)i2c + ((bus == 2) ? I2C_M2_TOKEN_LIST : I2C_M3_TOKEN_LIST));
-
+    uint32_t tk_reg0 = ((uint32_t *)i2c + ((bus == 2) ? I2C_M2_TOKEN_LIST : I2C_M3_TOKEN_LIST));
+    uint32_t tk_teg1 = tk_reg0 + sizeof(uint32_t);
+    uint32_t wdata0 = ((uint32_t *)i2c + ((bus == 2) ? I2C_M2_WDATA : I2C_M3_WDATA));
+    uint32_t wdata1 = wdata0 + sizeof(uint32_t);
 
     // reg0: tokens 0-7, reg1: tokens 8-15
     // Load next 16 tokens based upon number of tokens left in current req.
@@ -105,21 +102,68 @@ static inline int i2cLoadTokens(int bus) {
     // transaction to only one DAT token. Properly formed requests shouldn't have multiple DAT blocks
     // of total size < 8 contiguously so this assumption is safe.
 
-    // Iterating over this sounds stupid but we have to individually copy every byte anyway so it makes
-    // almost no difference to efficiency.
+    // Clear token buffer registers
+    tk_reg0 = 0x0;
+    tk_reg1 = 0x0;
+    wdata0 = 0x0;
+    wdata1 = 0x0;
+
     uint8_t tk_offset = 0;
     uint8_t wdat_offset = 0;
-    for (int i = 0; i < 16 && offset + i < num_tokens; i++) {
-        i2c_token_t tok = tokens[offset + i];
-
+    for (int i = 0; i < 16 && tk_offset + i < num_tokens; i++) {
+        i2c_token_t tok = tokens[tk_offset + i];
+        uint8_t odroid_tok = 0x0;
         // Translate token to ODROID token
         switch (tok) {
-            case I2C_START:
-                ;
+            case I2C_END:
+                odroid_tok = OC4_I2C_TK_END;
                 break;
+            case I2C_START:
+                odroid_tok = OC4_I2C_TK_START;
+                break;
+            case I2C_ADDRW:
+                odroid_tok = OC4_I2C_TK_ADDRW;
+                i2c_ifState[bus].ddr = 0;
+                break;
+            case I2C_ADDRR:
+                odroid_tok = OC4_I2C_TK_ADDRR;
+                i2c_ifState[bus].ddr = 1;
+                break;
+            case I2C_DAT:
+                odroid_tok = OC4_I2C_TK_DATA;
+                break;
+            default:
+                sel4cp_dbg_puts("i2c: invalid data token in request!\n");
+                return -1;
+        }
+
+
+        if (i < 8) {
+            tk_reg0 = tk_reg0 | (odroid_tok << (tk_offset * 4));
+            tk_offset++;
+        } else {
+            tk_reg1 = tk_reg1 | (odroid_tok << (tk_offset * 4));
+            tk_offset++;
+        }
+        // If data token and we are writing, load data into wbuf registers
+        if (odroid_tok == OC4_I2C_TK_DATA && !i2c_ifState[bus].ddr) {
+            if (i < 4) {
+                wdata0 = wdata0 | (tokens[tk_offset + i + 1] << (wdat_offset * 8));
+                wdat_offset++;
+            } else {
+                wdata1 = wdata1 | (tokens[tk_offset + i + 1] << (wdat_offset * 8));
+                wdat_offset++;
+            }
+            // Since we grabbed the next token in the chain, increment offset
+            i++;
         }
     }
+    // Data loaded. Update remaining tokens indicator and start list processor
+    i2c_ifState[bus].remaining = (i2c_ifState[bus].remaining > 16) ?
+            (i2c_ifState[bus].remaining - 16) : (0);
 
+    // Start list processor
+    ctl = ctl | 0x1;
 }
 
 /**
@@ -184,9 +228,19 @@ static inline void checkBuf(int bus) {
         if (!i2c_ifState[bus].current_ret) {
             sel4cp_dbg_puts("i2c: no ret buf!\n");
         }
-        
+
+        // Load bookkeeping data into return buffer
+        // Set client PD
+        i2c_ifState[bus].current_ret[2] = req[0];      // Client PD
+        // Set targeted i2c address
+        i2c_ifState[bus].current_ret[3] = req[1];      // Address
+        // Bytes 0 and 1 are for error code / location respectively and are set later
+
         // Trigger work start
         i2cLoadTokens(bus);
+    } else {
+        // If nothing needs to be done, clear notified flag if it was set.
+        i2c_ifState[bus].notified = 0;
     }
 }
 
@@ -206,41 +260,71 @@ static inline void serverNotify(void) {
     for (int i = 2; i < 4; i++) {
         checkBuf(i);
     }
-    
+}
 
-    if (reqM3) {
-        size_t szM3;
-        req_buf_ptr_t *reqM3 = popReqBuf(3, &szM3);
+/**
+ * IRQ handler for an i2c interface.
+ * @param bus The bus that triggered the IRQ
+ * @param timeout Whether the IRQ was triggered by a timeout. 0 if not, 1 if so.
+*/
+static inline void i2cirq(int bus, int timeout) {
+    // IRQ landed: i2c transaction has either completed or timed out.
+    if (timeout) {
+        sel4cp_dbg_puts("i2c: timeout!\n");
+    }
+
+    // Get result
+    int err = i2cGetError(bus);
+
+    // If error is 0, successful write. If error >0, successful read of err bytes.
+    // Prepare to extract data from the interface.
+    ret_buf_ptr_t * ret = i2c_ifState[bus].current_ret;
+
+    // If there was an error, cancel the rest of this transaction and load the
+    // error information into the return buffer.
+    if (err < 0) {
+        sel4cp_dbg_puts("i2c: error!\n");
+        uint8_t code;
+        if (timeout) 
+            code = I2C_ERR_TIMEOUT;
+        else if (err == -I2C_TK_ADDRR)
+            code = I2C_ERR_NOREAD;
+        else
+            code = I2C_ERR_NACK;
+        ret[0] = code;   // Error code
+        ret[1] = -err;   // Token that caused error
+    } else {
+        // If there was a read, extract the data from the interface
+        if (err > 0) {
+            // Get read data
+            uint32_t *rreg0 = ((uint32_t *)i2c + ((bus == 2) ? OC4_M2_RDATA : OC4_M3_RDATA));
+            uint32_t *rreg1 = rreg0 + sizeof(uint32_t);
+
+            // Copy data into return buffer
+            for (int i = 0; i < err; i++) {
+                ret[4+i] = (uint8_t)((rreg0[i] & 0xFF000000) >> 24);
+            }
+        }
+
+        ret[0] = I2C_ERR_OK;    // Error code
+        ret[1] = 0x0;           // Token that caused error
+    }
+
+    // If request is completed or there was an error, return data to server and notify.
+    if (err < 0 || !i2c_ifState[bus].remaining) {
+        pushRetBuf(bus, i2c_ifState[bus].current_ret, i2c_ifState[bus].current_req_len);
+        i2c_ifState[bus].current_req = 0x0;
+        i2c_ifState[bus].current_req_len = 0;
+    }
+
+    // If the driver was notified while this transaction was in progress, immediately start working on the next one.
+    // NOTE: this incurs more stack depth than needed; could use flag instead?
+    if (i2c_ifState[bus].notified) {
+        checkBuf(bus);
     }
 }
 
-/**
- * IRQ handler from I2C master 2 list completion.
-*/
-static inline void irqm2(void) {
 
-}
-
-/**
- * IRQ handler from I2C master 3 list completion.
-*/
-static inline void irqm3(void) {
-
-}
-
-/**
- * IRQ handler from I2C master 2 timeout.
-*/
-static inline void irqm2_to(void) {
-
-}
-
-/**
- * IRQ handler from I2C master 3 timeout.
-*/
-static inline void irqm3_to(void) {
-
-}
 
 void notified(sel4cp_channel c) {
     switch (c) {
@@ -248,16 +332,16 @@ void notified(sel4cp_channel c) {
             serverNotify();
             break;
         case IRQ_I2C_M2:
-            irqm2();
+            i2cirq(2,0);
             break;
         case IRQ_I2C_M2_TO:
-            irqm2_to();
+            i2cirq(2,1);
             break;
         case IRQ_I2C_M3:
-            irqm3();
+            i2cirq(3,0);
             break;
         case IRQ_I2C_M3_TO:
-            irqm3_to();
+            i2cirq(3,1);
             break;
     }
 }

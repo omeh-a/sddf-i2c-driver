@@ -209,3 +209,50 @@ int reqBufEmpty(int bus) {
     }
     return ring_empty(ring);
 }
+
+
+int releaseReqBuf(int bus, req_buf_ptr_t buf) {
+    if (bus != 2 && bus != 3) {
+        return 0;
+    }
+    if (!buf) {
+        return 0;
+    }
+    
+    // Allocate a buffer from the appropriate ring
+    ring_handle_t *ring;
+    if (bus == 2) {
+        ring = &m2ReqRing;
+    } else {
+        ring = &m3ReqRing;
+    }
+
+    // Enqueue the buffer
+    ret = enqueue_free(ring, (uintptr_t)buf, I2C_BUF_SZ);
+    if (ret != 0) {
+        return 0;
+    }
+}
+
+int releaseRetBuf(int bus, ret_buf_ptr_t buf) {
+    if (bus != 2 && bus != 3) {
+        return 0;
+    }
+    if (!buf) {
+        return 0;
+    }
+    
+    // Allocate a buffer from the appropriate ring
+    ring_handle_t *ring;
+    if (bus == 2) {
+        ring = &m2RetRing;
+    } else {
+        ring = &m3RetRing;
+    }
+
+    // Enqueue the buffer
+    ret = enqueue_free(ring, (uintptr_t)buf, I2C_BUF_SZ);
+    if (ret != 0) {
+        return 0;
+    }
+}
