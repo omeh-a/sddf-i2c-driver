@@ -1,0 +1,8 @@
+*.elf
+*.o
+*.d
+*.bin
+*.hex
+.vscode/
+i2c/build/
+i2c/build.sh

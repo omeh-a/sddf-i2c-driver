@@ -12,25 +12,11 @@
 #include <sel4cp.h>
 #include "i2c-driver.h"
 #include "i2c-token.h"
-#include "i2c-driver.c"
-#include "shared_ringbuffer.h"
+#include "sw_shared_ringbuffer.h"
+#include "i2c-transport.h"
 #include "i2c.h"
 
-// Shared memory regions
-uintptr_t m2_req_free;
-uintptr_t m2_req_used;
-uintptr_t m3_req_free;
-uintptr_t m3_req_used;
 
-uintptr_t m2_ret_free;
-uintptr_t m2_ret_used;
-uintptr_t m3_ret_free;
-uintptr_t m3_ret_used;
-
-uintptr_t client_req_free;
-uintptr_t client_req_used;
-uintptr_t client_ret_free;
-uintptr_t client_ret_used;
 
 // Security lists: one for each possible bus.
 i2c_security_list_t security_list0[I2C_SECURITY_LIST_SZ];
@@ -38,10 +24,33 @@ i2c_security_list_t security_list1[I2C_SECURITY_LIST_SZ];
 i2c_security_list_t security_list2[I2C_SECURITY_LIST_SZ];
 i2c_security_list_t security_list3[I2C_SECURITY_LIST_SZ];
 
+
+
+static inline void test() {
+    uint8_t cid = 1; // client id
+    uint8_t addr = 0x20; // address
+    i2c_token_t request[12] = {
+        I2C_TK_START,
+        I2C_TK_ADDRW,
+        I2C_TK_DAT,
+        0x01,
+        I2C_TK_DAT,
+        0x02,
+        I2C_TK_DAT,
+        0x03,
+        I2C_TK_STOP,
+        I2C_TK_END,
+    };
+
+    // Write 1,2,3 to address 0x20
+    allocReqBuf(2, 12, request, cid, addr);
+}
+
 /**
  * Main entrypoint for server.
 */
 void init(void) {
+    sel4cp_dbg_puts("I2C server init\n");
     // Clear security lists
     for (int i = 0; i < I2C_SECURITY_LIST_SZ; i++) {
         security_list0[i] = 0;
@@ -49,6 +58,7 @@ void init(void) {
         security_list2[i] = 0;
         security_list3[i] = 0;
     }
+
 }
 
 /**
@@ -74,7 +84,7 @@ void notified(sel4cp_channel c) {
 /**
  * Protected procedure calls into this server are used managing the security lists. 
 */
-sel4cp_message protected(sel4cp_channel c, sel4cp_message m) {
+seL4_MessageInfo_t protected(sel4cp_channel c, seL4_MessageInfo_t m) {
     // Determine the type of request
     uint64_t req = sel4cp_mr_get(I2C_PPC_REQTYPE);
     uint64_t arg1 = sel4cp_mr_get(1);   // Bus

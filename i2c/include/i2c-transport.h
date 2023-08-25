@@ -13,9 +13,30 @@
 #define I2C_TRANSPORT_H
 #include <stdint.h>
 #include <stddef.h>
+#include <sw_shared_ringbuffer.h>
+#include <string.h>
+#include "i2c-token.h"
 
 #define I2C_BUF_SZ 512
 #define I2C_BUF_COUNT 1024
+
+// Shared memory regions
+extern uintptr_t m2_req_free;
+extern uintptr_t m2_req_used;
+extern uintptr_t m3_req_free;
+extern uintptr_t m3_req_used;
+
+extern uintptr_t m2_ret_free;
+extern uintptr_t m2_ret_used;
+extern uintptr_t m3_ret_free;
+extern uintptr_t m3_ret_used;
+extern uintptr_t driver_bufs;
+
+extern ring_handle_t m2ReqRing;
+extern ring_handle_t m2RetRing;
+extern ring_handle_t m3ReqRing;
+extern ring_handle_t m3RetRing;
+
 
 // Metadata is encoded differently in returns vs. requests so we
 // have two types for safety.
@@ -84,7 +105,7 @@ int releaseRetBuf(int bus, ret_buf_ptr_t buf);
  * @param sz: Size of the buffer to be pushed back to the server
  * @return 0 on success
 */
-int pushRetBuf(int bus, req_buf_ptr_t buf, size_t sz);
+int pushRetBuf(int bus, ret_buf_ptr_t buf, size_t size);
 
 /**
  * Pop a return buffer from the server for a specified i2c master interface (bus).

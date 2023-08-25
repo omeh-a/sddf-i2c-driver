@@ -25,11 +25,8 @@ typedef struct _i2c_bus_state {
                             // actual speed, not the quarter clock delay.   
 } i2c_bus_t;
 
-// Security
-#define I2C_SECURITY_LIST_SZ 127    // Supports one entry for each device
-                                    // in standard 7-bit addressing
+
 typedef uint8_t i2c_addr_t;         // 7-bit addressing
-typedef i2c_addr_t i2c_security_list_t;
 
 
 // Driver-server interface

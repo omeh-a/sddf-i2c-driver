@@ -13,8 +13,6 @@
 
 #include "i2c-driver.h"
 #include "i2c-transport.h"
-#include "i2c-token.h"
-#include <sw_shared_ringbuffer.h>
 
 // Shared memory regions
 uintptr_t m2_req_free;
@@ -33,13 +31,12 @@ ring_handle_t m2RetRing;
 ring_handle_t m3ReqRing;
 ring_handle_t m3RetRing;
 
-
 void i2cTransportInit(int buffer_init) {
     // Initialise rings
-    ring_init(&m2ReqRing, (ring_buffer_t) m2_req_free, (ring_buffer_t) m2_req_used, NULL, buffer_init);
-    ring_init(&m2RetRing, (ring_buffer_t) m2_ret_free, (ring_buffer_t) m2_ret_used, NULL, buffer_init);
-    ring_init(&m3ReqRing, (ring_buffer_t) m3_req_free, (ring_buffer_t) m3_req_used, NULL, buffer_init);
-    ring_init(&m3RetRing, (ring_buffer_t) m3_ret_free, (ring_buffer_t) m3_ret_used, NULL, buffer_init);
+    ring_init(&m2ReqRing, (ring_buffer_t *) m2_req_free, (ring_buffer_t *) m2_req_used, buffer_init);
+    ring_init(&m2RetRing, (ring_buffer_t *) m2_ret_free, (ring_buffer_t *) m2_ret_used, buffer_init);
+    ring_init(&m3ReqRing, (ring_buffer_t *) m3_req_free, (ring_buffer_t *) m3_req_used, buffer_init);
+    ring_init(&m3RetRing, (ring_buffer_t *) m3_ret_free, (ring_buffer_t *) m3_ret_used, buffer_init);
 
     // If the caller is initialising, also populate the free buffers.
     // Since all buffers are back to back in memory, need to offset each ring's buffers
@@ -47,12 +44,12 @@ void i2cTransportInit(int buffer_init) {
     if (buffer_init) {
         for (int i = 0; i < I2C_BUF_COUNT; i++) {
             // First I2C_BUF_SZ entries
-            enqueue_free(&m2ReqRing, (ring_buffer_t) driver_bufs + (i * I2C_BUF_SZ), I2C_BUF_SZ);
+            enqueue_free(&m2ReqRing, (ring_buffer_t *) driver_bufs + (i * I2C_BUF_SZ), I2C_BUF_SZ);
             // I2C_BUF_SZ + 1 to 2 * I2C_BUF_SZ entries
-            enqueue_free(&m2RetRing, (ring_buffer_t) driver_bufs + (I2C_BUF_SZ * (i + I2C_BUF_SZ)), I2C_BUF_SZ);
+            enqueue_free(&m2RetRing, (ring_buffer_t *) driver_bufs + (I2C_BUF_SZ * (i + I2C_BUF_SZ)), I2C_BUF_SZ);
             // Next ones are 2*I2C_BUF_SZ + 1 to 3*I2C_BUF_SZ and so on.
-            enqueue_free(&m3ReqRing, (ring_buffer_t) driver_bufs + (I2C_BUF_SZ * (i + (2 * I2C_BUF_SZ))), I2C_BUF_SZ);
-            enqueue_free(&m3RetRing, (ring_buffer_t) driver_bufs + (I2C_BUF_SZ * (i + (3 * I2C_BUF_SZ))), I2C_BUF_SZ);
+            enqueue_free(&m3ReqRing, (ring_buffer_t *) driver_bufs + (I2C_BUF_SZ * (i + (2 * I2C_BUF_SZ))), I2C_BUF_SZ);
+            enqueue_free(&m3RetRing, (ring_buffer_t *) driver_bufs + (I2C_BUF_SZ * (i + (3 * I2C_BUF_SZ))), I2C_BUF_SZ);
         }
     }
 }
@@ -74,7 +71,7 @@ req_buf_ptr_t allocReqBuf(int bus, size_t size, uint8_t *data, uint8_t client, u
         ring = &m3ReqRing;
     }
     uintptr_t buf;
-    int sz;
+    unsigned int sz;
     int ret = dequeue_free(ring, &buf, &sz);
     if (ret != 0) {
         return 0;
@@ -97,23 +94,21 @@ req_buf_ptr_t allocReqBuf(int bus, size_t size, uint8_t *data, uint8_t client, u
     return buf;
 }
 
-ret_buf_ptr_t getRetBuf(int bus, size_t size) {
+ret_buf_ptr_t getRetBuf(int bus) {
     if (bus != 2 && bus != 3) {
         return 0;
     }
-    if (size > I2C_BUF_SZ - 3*sizeof(i2c_token_t)) {
-        return 0;
-    }
+
     
     // Allocate a buffer from the appropriate ring
     ring_handle_t *ring;
     if (bus == 2) {
         ring = &m2RetRing;
     } else {
-        ring = &m3ReRing;
+        ring = &m3RetRing;
     }
     uintptr_t buf;
-    int sz;
+    unsigned int sz;
     int ret = dequeue_free(ring, &buf, &sz);
     if (ret != 0) {
         return 0;
@@ -121,7 +116,7 @@ ret_buf_ptr_t getRetBuf(int bus, size_t size) {
     return buf;
 }
 
-req_buf_ptr_t pushRetBuf(int bus, req_buf_ptr_t buf, size_t size) {
+int pushRetBuf(int bus, ret_buf_ptr_t buf, size_t size) {
     if (bus != 2 && bus != 3) {
         return 0;
     }
@@ -134,20 +129,21 @@ req_buf_ptr_t pushRetBuf(int bus, req_buf_ptr_t buf, size_t size) {
     if (bus == 2) {
         ring = &m2RetRing;
     } else {
-        ring = &m3ReRing;
+        ring = &m3RetRing;
     }
 
     // Enqueue the buffer
-    ret = enqueue_used(ring, (uintptr_t)buf, size);
+    int ret = enqueue_used(ring, (uintptr_t)buf, size);
     if (ret != 0) {
         return 0;
     }
+    return -1;
 }
 
 static inline uintptr_t popBuf(ring_handle_t *ring, size_t *sz) {
     uintptr_t buf;
-    int ret = dequeue_used(ring, &buf, &size);
-    if (ret != 0) return 0
+    int ret = dequeue_used(ring, &buf, &sz);
+    if (ret != 0) return 0;
     return buf;
 } 
 
@@ -228,10 +224,11 @@ int releaseReqBuf(int bus, req_buf_ptr_t buf) {
     }
 
     // Enqueue the buffer
-    ret = enqueue_free(ring, (uintptr_t)buf, I2C_BUF_SZ);
+    int ret = enqueue_free(ring, (uintptr_t)buf, I2C_BUF_SZ);
     if (ret != 0) {
         return 0;
     }
+    return -1;
 }
 
 int releaseRetBuf(int bus, ret_buf_ptr_t buf) {
@@ -251,8 +248,9 @@ int releaseRetBuf(int bus, ret_buf_ptr_t buf) {
     }
 
     // Enqueue the buffer
-    ret = enqueue_free(ring, (uintptr_t)buf, I2C_BUF_SZ);
+    int ret = enqueue_free(ring, (uintptr_t)buf, I2C_BUF_SZ);
     if (ret != 0) {
         return 0;
     }
+    return -1;
 }
