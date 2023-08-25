@@ -18,7 +18,7 @@
 #include "i2c-token.h"
 
 #define I2C_BUF_SZ 512
-#define I2C_BUF_COUNT 1024
+#define I2C_BUF_COUNT 511
 
 // Shared memory regions
 extern uintptr_t m2_req_free;

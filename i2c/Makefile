@@ -58,7 +58,7 @@ CFLAGS += -I$(BOARD_DIR)/include \
 # SERVERFILES: Files implementing the server side of the i2c stack
 SERVERFILES=$(I2C)/i2c.c
 DRIVERFILES=$(I2C)/i2c-driver.c $(I2C)/i2c-odroid-c4.c
-COMMONFILES=$(I2C)/i2c-transport.c $(I2C)/sw_shared_ringbuffer.c
+COMMONFILES=$(I2C)/i2c-transport.c $(I2C)/sw_shared_ringbuffer.c $(I2C)/printf.c
 
 SERVER_OBJS := $(I2C)/i2c.o $(COMMONFILES:.c=.o)
 DRIVER_OBJS := $(I2C)/i2c_driver.o $(I2C)/i2c-odroid-c4.o $(COMMONFILES:.c=.o)

@@ -41,9 +41,14 @@ static inline void test() {
         I2C_TK_STOP,
         I2C_TK_END,
     };
-
+    sel4cp_dbg_puts("test: allocating req buffer\n");
     // Write 1,2,3 to address 0x20
-    allocReqBuf(2, 12, request, cid, addr);
+    req_buf_ptr_t ret = allocReqBuf(2, 12, request, cid, addr);
+    if (!ret) {
+        sel4cp_dbg_puts("test: failed to allocate req buffer\n");
+        return;
+    }
+    sel4cp_notify(DRIVER_NOTIFY_ID);
 }
 
 /**
@@ -51,6 +56,7 @@ static inline void test() {
 */
 void init(void) {
     sel4cp_dbg_puts("I2C server init\n");
+    i2cTransportInit(1);
     // Clear security lists
     for (int i = 0; i < I2C_SECURITY_LIST_SZ; i++) {
         security_list0[i] = 0;
@@ -58,6 +64,8 @@ void init(void) {
         security_list2[i] = 0;
         security_list3[i] = 0;
     }
+
+    test();
 
 }
 

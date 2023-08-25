@@ -17,15 +17,16 @@
 #include "odroidc4-i2c-mem.h"
 #include "i2c-transport.h"
 #include <stdint.h>
-
+#include "printf.h"
 
 // Hardware memory
 uintptr_t i2c;
 
+
 // Driver state
 typedef struct _i2c_ifState {
-    req_buf_ptr_t *current_req; // Pointer to current request.
-    ret_buf_ptr_t *current_ret; // Pointer to current return buf.
+    req_buf_ptr_t current_req; // Pointer to current request.
+    ret_buf_ptr_t current_ret; // Pointer to current return buf.
     int current_req_len;        // Number of bytes in current request.
     int remaining;              // Number of bytes remaining to dispatch.
     int notified;               // Flag indicating that there is more work waiting.
@@ -64,6 +65,7 @@ static inline int i2cGetError(int bus) {
  * based upon the current task stored in i2c_ifState[bus].current_req.
 */
 static inline int i2cLoadTokens(int bus) {
+    sel4cp_dbg_puts("driver: starting token load\n");
     i2c_token_t * tokens = (i2c_token_t *)i2c_ifState[bus].current_req;
     
     // Extract second byte: address
@@ -191,6 +193,7 @@ static inline void setupi2c(void) {
 
 void init(void) {
     setupi2c();
+    i2cTransportInit(0);
     // Set up driver state
     for (int i = 2; i < 4; i++) {
         i2c_ifState[i].current_req = NULL;
@@ -199,47 +202,63 @@ void init(void) {
         i2c_ifState[i].remaining = 0;
         i2c_ifState[i].notified = 0;
     }
+    sel4cp_dbg_puts("Driver initialised.\n");
 }
 
 /**
  * Check if there is work to do for a given bus and dispatch it if so.
 */
 static inline void checkBuf(int bus) {
+    sel4cp_dbg_puts("driver: checking bus ");
+    sel4cp_dbg_putc((char)bus + '0');
+    sel4cp_dbg_puts("\n");
+
+
     if (!reqBufEmpty(bus)) {
         // If this interface is busy, skip notification and
         // set notified flag for later processing
         if (i2c_ifState[bus].current_req) {
+            sel4cp_dbg_puts("driver: request in progress, deferring notification\n");
             i2c_ifState[bus].notified = 1;
             return;
         }
+        sel4cp_dbg_puts("driver: starting work for bus\n");
         // Otherwise, begin work. Start by extracting the request
         size_t sz;
-        req_buf_ptr_t *req = popReqBuf(bus, &sz);
+        uint8_t *req = popReqBuf(bus, &sz);
 
         if (!req) {
             return;   // If request was invalid, run away.
         }
 
+        uint8_t *ret = getRetBuf(bus);
+        // Load bookkeeping data into return buffer
+        // Set client PD
+
+        // print pointers
+        printf("req: %p\n", req);
+        printf("ret: %p\n", ret);
+
+        ret[2] = req[0];      // Client PD
+        sel4cp_dbg_puts("rigatoni\n");
+        // Set targeted i2c address
+        ret[3] = req[1];      // Address
+
         i2c_ifState[bus].current_req = req;
         i2c_ifState[bus].current_req_len = sz;
         i2c_ifState[bus].remaining = sz;
         i2c_ifState[bus].notified = 0;
-        i2c_ifState[bus].current_ret = getRetBuf(bus);
-
+        i2c_ifState[bus].current_ret = ret;
         if (!i2c_ifState[bus].current_ret) {
             sel4cp_dbg_puts("i2c: no ret buf!\n");
         }
 
-        // Load bookkeeping data into return buffer
-        // Set client PD
-        i2c_ifState[bus].current_ret[2] = req[0];      // Client PD
-        // Set targeted i2c address
-        i2c_ifState[bus].current_ret[3] = req[1];      // Address
         // Bytes 0 and 1 are for error code / location respectively and are set later
 
         // Trigger work start
         i2cLoadTokens(bus);
     } else {
+        sel4cp_dbg_puts("driver: called but no work available: resetting notified flag\n");
         // If nothing needs to be done, clear notified flag if it was set.
         i2c_ifState[bus].notified = 0;
     }
@@ -257,7 +276,7 @@ static inline void serverNotify(void) {
     // they operate in parallel and notifications carry no other info.
     
     // If there is work to do, attempt to do it
-    
+    sel4cp_dbg_puts("i2c: driver notified!\n");
     for (int i = 2; i < 4; i++) {
         checkBuf(i);
     }
@@ -269,6 +288,10 @@ static inline void serverNotify(void) {
  * @param timeout Whether the IRQ was triggered by a timeout. 0 if not, 1 if so.
 */
 static inline void i2cirq(int bus, int timeout) {
+    sel4cp_dbg_puts("i2c: driver irq for bus ");
+    sel4cp_dbg_putc((char)bus);
+
+    
     // IRQ landed: i2c transaction has either completed or timed out.
     if (timeout) {
         sel4cp_dbg_puts("i2c: timeout!\n");
