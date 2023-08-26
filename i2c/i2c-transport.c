@@ -61,18 +61,6 @@ void i2cTransportInit(int buffer_init) {
         }
     }
 
-    // // Print pointers to each shared memory region
-    // printf("m2_req_free: %p\n", m2_req_free);
-    // printf("m2_req_used: %p\n", m2_req_used);
-    // printf("m3_req_free: %p\n", m3_req_free);
-    // printf("m3_req_used: %p\n", m3_req_used);
-
-    // printf("m2_ret_free: %p\n", m2_ret_free);
-    // printf("m2_ret_used: %p\n", m2_ret_used);
-    // printf("m3_ret_free: %p\n", m3_ret_free);
-    // printf("m3_ret_used: %p\n", m3_ret_used);
-    // printf("driver_bufs: %p\n", driver_bufs);
-
 }
 
 
@@ -106,8 +94,14 @@ req_buf_ptr_t allocReqBuf(int bus, size_t size, uint8_t *data, uint8_t client, u
     // Copy the data into the buffer
     memcpy((void *) buf + 2*sizeof(i2c_token_t), data, size);
     
+    // print buffer
+    for (int i = 0; i < size + 2*sizeof(uint8_t); i++) {
+        printf("%x ", *(uint8_t *) (buf + i));
+    }
+    printf("\n");
     // Enqueue the buffer
     ret = enqueue_used(ring, buf, size + 2*sizeof(uint8_t));
+    printf("transport: Allocated request buffer %p storing %u bytes\n", buf, size);
     if (ret != 0) {
         enqueue_free(ring, buf, I2C_BUF_SZ);
         return 0;
@@ -168,7 +162,8 @@ int pushRetBuf(int bus, ret_buf_ptr_t buf, size_t size) {
 
 static inline uintptr_t popBuf(ring_handle_t *ring, size_t *sz) {
     uintptr_t buf;
-    int ret = dequeue_used(ring, &buf, &sz);
+    int ret = dequeue_used(ring, &buf, sz);
+    printf("Popping buffer containing %u bytes\n", *sz);
     if (ret != 0) return 0;
     return buf;
 } 

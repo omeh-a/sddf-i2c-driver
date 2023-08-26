@@ -9,7 +9,7 @@
 // Matt Rossouw (matthew.rossouw@unsw.edu.au)
 // 08/2023
 
-// Note that the entire I2C memory region fits in one 2KiB page
+// Note that the entire I2C memory region fits in one 2MiB page
 // originating at I2C_BASE, which is page aligned.
 
 #ifndef I2C_MEM_H

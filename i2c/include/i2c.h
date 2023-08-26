@@ -12,7 +12,7 @@
 #ifndef I2C_H
 #define I2C_H
 
-
+#define I2C_MEM_OFFSET 0x22000
 
 
 #define DRIVER_NOTIFY_ID 1  // Matching i2c.system
