@@ -4,7 +4,7 @@
 <!-- 2023 -->
 <system>
     <!-- i2c hardware -->
-    <memory_region name="i2c" size="0x200_000" phys_addr="0xFFD1C000"/>
+    <memory_region name="i2c" size="0x20_000" phys_addr="0xFFD1C000"/>
     <!-- <memory_region name="i2cm3" size="0x10_000" phys_addr="0xFFD1C000"/>
     <memory_region name="i2cm2" size="0x10_000" phys_addr="0xFFD1D000"/> -->
 

@@ -43,7 +43,7 @@ static inline void test() {
     };
     sel4cp_dbg_puts("test: allocating req buffer\n");
     // Write 1,2,3 to address 0x20
-    req_buf_ptr_t ret = allocReqBuf(3, 12, request, cid, addr);
+    req_buf_ptr_t ret = allocReqBuf(2, 12, request, cid, addr);
     if (!ret) {
         sel4cp_dbg_puts("test: failed to allocate req buffer\n");
         return;

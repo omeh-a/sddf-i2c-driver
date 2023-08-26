@@ -205,6 +205,52 @@ static inline void setupi2c(void) {
     m3ctl = m3ctl |  (0x003FF000);
     m2ctl = m2ctl & ~(0x00000003);   // Disable ACK IGNORE and set list processor to paused.
     m3ctl = m3ctl & ~(0x00000003);
+
+    // Sanity check: Enable manual mode for m3 and repeatedly set SDA high and low
+    // SDA level: bit 24
+    // Manual bit: 22
+
+    // Enable manual
+    // m3ctl = m3ctl | 0x00400000;
+    // m2ctl = m2ctl | 0x00400000;
+    // // Check that this bit is set
+    // if ((m3ctl & 0x00400000) == 0) {
+    //     printf("driver: failed to enable manual mode for m3!\n");
+    //     return;
+    // }
+
+    // // Set SDA high
+    // m2ctl = m2ctl | 0x01000000;
+    // // Set SDA low
+    // m2ctl = m2ctl & ~(0x01000000);
+    // // Set SDA high
+    // m3ctl = m3ctl | 0x01000000;
+    // // Set SDA low
+    // m3ctl = m3ctl & ~(0x01000000);
+    // // Set SDA high
+    // m2ctl = m2ctl | 0x01000000;
+    // // Set SDA low
+    // m2ctl = m2ctl & ~(0x01000000);
+    // // Set SDA high
+    // m3ctl = m3ctl | 0x01000000;
+    // // Set SDA low
+    // m3ctl = m3ctl & ~(0x01000000);
+    // // Set SDA high
+    // m2ctl = m2ctl | 0x01000000;
+    // // Set SDA low
+    // m2ctl = m2ctl & ~(0x01000000);
+    // // Set SDA high
+    // m3ctl = m3ctl | 0x01000000;
+    // // Set SDA low
+    // m3ctl = m3ctl & ~(0x01000000);
+    // // Set SDA high
+    // m2ctl = m2ctl | 0x01000000;
+    // // Set SDA low
+    // m2ctl = m2ctl & ~(0x01000000);
+    // // Set SDA high
+    // m3ctl = m3ctl | 0x01000000;
+    // // Set SDA low
+    // m3ctl = m3ctl & ~(0x01000000);
 }
 
 void init(void) {
