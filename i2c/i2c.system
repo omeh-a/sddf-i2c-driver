@@ -4,9 +4,10 @@
 <!-- 2023 -->
 <system>
     <!-- i2c hardware -->
-    <memory_region name="i2c" size="0x20_000" phys_addr="0xFFD1C000"/>
-    <!-- <memory_region name="i2cm3" size="0x10_000" phys_addr="0xFFD1C000"/>
-    <memory_region name="i2cm2" size="0x10_000" phys_addr="0xFFD1D000"/> -->
+    <memory_region name="i2c" size="0x4_000" phys_addr="0xFFD1C000"/>
+    <memory_region name="gpio" size="0x1000" phys_addr="0xFF634000"/>
+    <memory_region name="clk" size="0x1000" phys_addr="0xFF63C000"/> 
+
 
     <!-- Shared ring buffers -->
     <!-- Transfer channels server <-> driver -->
@@ -66,23 +67,25 @@
         <map mr="m3_ret_free" vaddr="0x4_C00_000" perms="rw" setvar_vaddr="m3_ret_free"/>
         <map mr="m3_ret_used" vaddr="0x4_E00_000" perms="rw" setvar_vaddr="m3_ret_used"/>
         <map mr="driver_bufs" vaddr="0x5_000_000" perms="rw" setvar_vaddr="driver_bufs"/>
-        <map mr="i2c" vaddr="0x3_000_000" perms="rw" setvar_vaddr="i2c" cached="false"/>
+        <map mr="i2c"         vaddr="0x3_000_000" perms="rw" setvar_vaddr="i2c" cached="false"/>
+        <map mr="gpio"        vaddr="0x3_100_000" perms="rw" setvar_vaddr="gpio" cached="false"/>
+        <map mr="clk"         vaddr="0x3_200_000" perms="rw" setvar_vaddr="clk" cached="false"/>
         <!-- <map mr="i2cm2" vaddr="0x3_100_000" perms="rw" setvar_vaddr="i2cm2" cached="false"/> -->
 
         <!-- M2 IRQs -->
         <!-- Main interrupt -->
-        <irq irq="53" id="2"/>
+        <irq irq="247" id="2" trigger="edge"/>
 
         <!-- TO interrupt (timeout?) -->
-        <irq irq="127" id="3"/>
+        <irq irq="126" id="3" trigger="edge"/>
 
 
         <!-- M3 IRQs -->
         <!-- Main interrupt -->
-        <irq irq="71" id="4"/>
+        <irq irq="71" id="4" trigger="edge"/>
 
         <!-- TO interrupt (timeout?) -->
-        <irq irq="126" id="5"/>
+        <irq irq="127" id="5" trigger="edge"/>
     </protection_domain>
 
     <!-- Client protection domain - for testing -->

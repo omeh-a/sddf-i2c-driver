@@ -32,6 +32,7 @@ ring_handle_t m2RetRing;
 ring_handle_t m3ReqRing;
 ring_handle_t m3RetRing;
 
+
 void _putchar(char character) {
     sel4cp_dbg_putc(character);
 }

@@ -14,14 +14,7 @@
 
 #ifndef I2C_MEM_H
 #define I2C_MEM_H
-
-#define I2C_BASE 0xFF805000
-#define I2C_EE_BASE 0xFF824000
-
-#define I2C_M0_ENABLE 0
-#define I2C_M1_ENABLE 0
-#define I2C_M2_ENABLE 1
-#define I2C_M3_ENABLE 1
+#define BIT(n)  (1U << (n))
 
 // I2C registers are indexed as their memory region + 4*offset.
 // Unless otherwise indicated, all fields are two words long.
@@ -31,6 +24,20 @@
 #define I2C_WDATA       (0x4)
 #define I2C_RDATA       (0x6)
 
+// Ctl register fields
+#define REG_CTRL_START		BIT(0)
+#define REG_CTRL_ACK_IGNORE	BIT(1)
+#define REG_CTRL_STATUS		BIT(2)
+#define REG_CTRL_ERROR		BIT(3)
+#define REG_CTRL_CURR_TK    BIT(4) | BIT(5) | BIT(6) | BIT(7)
+#define REG_CTRL_RD_CNT     BIT(8) | BIT(9) | BIT(10) | BIT(11)
+#define REG_CTRL_MANUAL     BIT(22)
+#define REG_CTRL_MAN_S_SCL  BIT(23)
+#define REG_CTRL_MAN_S_SDA  BIT(24)
+#define REG_CTRL_MAN_G_SCL  BIT(25)
+#define REG_CTRL_MAN_G_SDA  BIT(26)
+#define REG_CTRL_CLKDIV_SHIFT	12
+#define REG_CTRL_CLKDIV_MASK	((BIT(10) - 1) << REG_CTRL_CLKDIV_SHIFT)
 
 #define OC4_I2C_TK_END      (0x0)     // END: Terminator for token list, has no meaning to hardware otherwise
 #define OC4_I2C_TK_START    (0x1)     // START: Begin an i2c transfer. Causes master device to capture bus.
