@@ -21,6 +21,8 @@
 #include "clk.h"
 #include <stdint.h>
 #include "printf.h"
+#include "fence.h"
+
 
 // Hardware memory
 uintptr_t i2c;
@@ -74,6 +76,116 @@ i2c_ifState_t i2c_ifState[4];
 
 
 /**
+ * Initialise the i2c master interfaces.
+*/
+static inline void setupi2c(void) {
+    printf("driver: initialising i2c master interfaces...\n");
+    // Set up pinmux
+    // Pointers to the hardware registers
+    volatile uint32_t *pinmux5_ptr = (volatile uint32_t *)(gpio + GPIO_OFFSET + GPIO_PINMUX_5 * 4);
+    volatile uint32_t *pinmuxE_ptr = (volatile uint32_t *)(gpio + GPIO_OFFSET + GPIO_PINMUX_E * 4);
+    volatile uint32_t *clk81_ptr = (volatile uint32_t *)(clk + I2C_CLK_OFFSET);
+
+    // m3ctl and m2ctl pointers
+    m3ctl = (volatile uint32_t *)(i2c);
+    // printf("m3ctl: %p\n", m3ctl);
+    m2ctl = (volatile uint32_t *)(i2c + 0x1000);
+    // printf("m2ctl: %p\n", m2ctl);
+
+    // Read existing register values
+    uint32_t pinmux5 = *pinmux5_ptr;
+    uint32_t pinmuxE = *pinmuxE_ptr;
+    uint32_t clk81 = *clk81_ptr;
+
+    // Enable i2cm2 -> pinmux 5
+    uint8_t pinfunc = GPIO_PM5_X_I2C;
+    pinmux5 |= (pinfunc << 4) | (pinfunc << 8);
+    *pinmux5_ptr = pinmux5;
+
+    // Enable i2cm3 -> pinmux E
+    pinfunc = GPIO_PE_A_I2C;
+    pinmuxE |= (pinfunc << 24) | (pinfunc << 28);
+    *pinmuxE_ptr = pinmuxE;
+
+    // Enable by removing clock gate
+    clk81 |= (I2C_CLK81_BIT);
+    *clk81_ptr = clk81;
+
+    // Check that registers actually changed
+    if (!(*clk81_ptr & I2C_CLK81_BIT)) {
+        printf("driver: failed to toggle clock!\n");
+    }
+    if (!(*pinmux5_ptr & (GPIO_PM5_X18 | GPIO_PM5_X17))) {
+        printf("driver: failed to set pinmux5!\n");
+    }
+
+
+    // Initialise fields
+    *m2ctl = *m2ctl & ~(REG_CTRL_MANUAL);   // Disable manual mode
+    *m3ctl = *m3ctl & ~(REG_CTRL_MANUAL);
+
+    *m2ctl = *m2ctl | ((uint8_t)322 << REG_CTRL_CLKDIV_SHIFT);   // Set quarter clock delay to default clock speed
+    *m3ctl = *m3ctl | ((uint8_t)322 << REG_CTRL_CLKDIV_SHIFT);
+    *m2ctl = *m2ctl & ~(REG_CTRL_ACK_IGNORE);   // Disable ACK IGNORE
+    *m3ctl = *m3ctl & ~(REG_CTRL_ACK_IGNORE);
+    // *m2ctl = *m2ctl | (REG_CTRL_CNTL_JIC);      // Bypass dynamic clock gating
+    // *m3ctl = *m3ctl | (REG_CTRL_CNTL_JIC);
+
+    // Handle clocking
+    // Stolen from Linux Kernel's amlogic driver
+    /*
+    * According to I2C-BUS Spec 2.1, in FAST-MODE, LOW period should be at
+    * least 1.3uS, and HIGH period should be at lease 0.6. HIGH to LOW
+    * ratio as 2 to 5 is more safe.
+    * Duty  = H/(H + L) = 2/5	-- duty 40%%   H/L = 2/3
+    * Fast Mode : 400k
+    * High Mode : 3400k
+    */
+    // const uint32_t clk_rate = 166666666; // 166.666MHz -> clk81
+    // const uint32_t freq = 400000; // 400kHz
+    // const uint32_t delay_adjust = 0;
+    // uint32_t div_temp = (clk_rate * 2)/(freq * 5);
+	// uint32_t div_h = div_temp - delay_adjust;
+	// uint32_t div_l = (clk_rate * 3)/(freq * 10);
+
+    // Duty cycle slightly high with this - should adjust (47% instead of 40%)
+    uint32_t div_h = 154;
+    uint32_t div_l = 116;
+
+    *m2ctl &= ~(REG_CTRL_CLKDIV_MASK);
+    *m3ctl &= ~(REG_CTRL_CLKDIV_MASK);
+    *m2ctl |= (div_h << REG_CTRL_CLKDIV_SHIFT);
+    *m3ctl |= (div_h << REG_CTRL_CLKDIV_SHIFT);
+
+    // Set clock delay levels
+    volatile uint32_t *m2addr = (volatile uint32_t *)(m2ctl + I2C_ADDRESS);
+    volatile uint32_t *m3addr = (volatile uint32_t *)(m3ctl + I2C_ADDRESS);
+    
+
+    // Set SCL filtering
+    *m2addr &= ~(REG_ADDR_SCLFILTER);
+    *m3addr &= ~(REG_ADDR_SCLFILTER);
+    *m2addr |= (0x7 << 11);
+    *m3addr |= (0x7 << 11);
+
+    // Set SDA filtering
+    *m2addr &= ~(REG_ADDR_SDAFILTER);
+    *m3addr &= ~(REG_ADDR_SDAFILTER);
+    *m2addr |= (0x7 << 8);
+    *m3addr |= (0x7 << 8);
+
+    // Field has 9 bits: clear then shift in div_l
+    *m2addr &= ~(0x1FF << REG_ADDR_SCLDELAY_SHFT);
+    *m3addr &= ~(0x1FF << REG_ADDR_SCLDELAY_SHFT);
+    *m2addr |= (div_l << REG_ADDR_SCLDELAY_SHFT);
+    *m3addr |= (div_l << REG_ADDR_SCLDELAY_SHFT);
+
+    // Enable low delay time adjustment
+    *m2addr |= REG_ADDR_SCLDELAY_ENABLE;
+    *m3addr |= REG_ADDR_SCLDELAY_ENABLE;
+}
+
+/**
  * Given a bus number, retrieve the error code stored in the control register
  * associated.
  * @param bus i2c EE-domain master interface to check
@@ -103,36 +215,38 @@ static inline int i2cLoadTokens(int bus) {
     printf("Tokens remaining in this req: %d\n", i2c_ifState[bus].remaining);
     
     // Extract second byte: address
-    i2c_token_t addr = tokens[1];
+    uint8_t addr = tokens[1];
     if (addr > 0x7F) {
         sel4cp_dbg_puts("i2c: attempted to write to address > 7-bit range!\n");
         return -1;
     }
-
+    COMPILER_MEMORY_FENCE();
     volatile uint32_t *ctl = (bus == 2) ? m2ctl : m3ctl;
     *ctl = *ctl & ~0x1;
+    if (*ctl & 0x1) {
+        sel4cp_dbg_puts("i2c: failed to clear start bit!\n");
+        return -1;
+    }
 
     // Load address into address register
-    volatile uint32_t *addr_reg = (uint32_t *)(ctl + 4*I2C_ADDR);
+    volatile uint32_t *addr_reg = (volatile uint32_t *)(ctl + I2C_ADDRESS);
 
     // Address goes into low 7 bits of address register
     *addr_reg = *addr_reg & ~(0x7F);
-    *addr_reg = *addr_reg | (addr << 1);  // i2c hardware expects that the 7-bit address is shifted left by 1
+    *addr_reg = *addr_reg | ((addr << 1) & 0x7f);  // i2c hardware expects that the 7-bit address is shifted left by 1
+    // Print address from reg, to validate
+    printf("Address in : 0x%x -- Address stored: 0x%x\n",addr, (*addr_reg) & 0x7F);
+
 
     // Load tokens into token registers, data into data registers
-    volatile uint32_t *tk_reg0 = (uint32_t *)(ctl + 4*I2C_TOKEN_LIST);
-    volatile uint32_t *tk_reg1 = (uint32_t *)(tk_reg0 + 4);
-    volatile uint32_t *wdata0 = (uint32_t *)(ctl + 4*I2C_WDATA);
-    volatile uint32_t *wdata1 = (uint32_t *)(wdata0 + 4);
+    volatile uint32_t *tk_reg0 = (volatile uint32_t *)(ctl + I2C_TOKEN_LIST);
+    volatile uint32_t *tk_reg1 = (volatile uint32_t *)(ctl + 1 + I2C_TOKEN_LIST);
+    volatile uint32_t *wdata0 = (volatile uint32_t *)(ctl + I2C_WDATA);
+    volatile uint32_t *wdata1 = (volatile uint32_t *)(ctl + 1 + I2C_WDATA);
 
     // reg0: tokens 0-7, reg1: tokens 8-15
     // Load next 16 tokens based upon number of tokens left in current req.
     int num_tokens = i2c_ifState[bus].current_req_len;
-    // int offset = num_tokens - i2c_ifState[bus].remaining;
-
-    // Iterate over the next 16 tokens (or 8 DATs). The ODROID can only process 16 tokens at a time,
-    // and can only read 8 and write 8 at a time. -> NOT CORRECT -> Combined reads and writes are impossible since
-    // each transaction chain only has one data direction bit specified.
 
     // Clear token buffer registers
     *tk_reg0 = 0x0;
@@ -141,14 +255,8 @@ static inline int i2cLoadTokens(int bus) {
     *wdata1 = 0x0;
     uint32_t tk_offset = 0;
     uint32_t wdat_offset = 0;
-
-    printf("tk_reg0 = 0x%lx\n", *tk_reg0);
-    *tk_reg0 = 0xFFFFFFFF;
-    printf("0xFFFFFFFF = 0x%lx\n", *tk_reg0);
-
-    printf("tk_reg1 = 0x%lx\n", *tk_reg1);
-    *tk_reg1 = 0xFFFFFFFF;
-    printf("0xFFFFFFFF = 0x%lx\n", *tk_reg1);
+    // printf("ctl *= %p\n", ctl);
+    // printf("tk_reg0 *= 0x%p\n", tk_reg0);
 
     for (int i = 0; i < 16 && i < i2c_ifState[bus].remaining; i++) {
         // Skip first two: client id and addr
@@ -225,7 +333,6 @@ static inline int i2cLoadTokens(int bus) {
         }
     }
 
-
     // Data loaded. Update remaining tokens indicator and start list processor
     i2c_ifState[bus].remaining = (i2c_ifState[bus].remaining >= 16) ?
             (i2c_ifState[bus].remaining - 16) : 0;
@@ -237,64 +344,16 @@ static inline int i2cLoadTokens(int bus) {
 
     *ctl = *ctl & ~0x1;
     *ctl = *ctl | 0x1;
+    if (!(*ctl & 0x1)) {
+        sel4cp_dbg_puts("i2c: failed to set start bit!\n");
+        return -1;
+    }
+    COMPILER_MEMORY_FENCE();
 
     return 0;
 }
 
-/**
- * Initialise the i2c master interfaces.
-*/
-static inline void setupi2c(void) {
-    printf("driver: initialising i2c master interfaces...\n");
-    // Set up pinmux
-    // Pointers to the hardware registers
-    volatile uint32_t *pinmux5_ptr = (uint32_t *)(gpio + GPIO_OFFSET + GPIO_PINMUX_5 * 4);
-    volatile uint32_t *pinmuxE_ptr = (uint32_t *)(gpio + GPIO_OFFSET + GPIO_PINMUX_E * 4);
-    volatile uint32_t *clk81_ptr = (uint32_t *)(clk + I2C_CLK_OFFSET);
 
-    // m3ctl and m2ctl pointers
-    m3ctl = (uint32_t *)(i2c);
-    m2ctl = (uint32_t *)(i2c + 0x1000);
-
-    // Read existing register values
-    uint32_t pinmux5 = *pinmux5_ptr;
-    uint32_t pinmuxE = *pinmuxE_ptr;
-    uint32_t clk81 = *clk81_ptr;
-
-    // Enable i2cm2 -> pinmux 5
-    uint8_t pinfunc = GPIO_PM5_X_I2C;
-    pinmux5 |= (pinfunc) | (pinfunc << 4);
-    *pinmux5_ptr = pinmux5;
-
-    // Enable i2cm3 -> pinmux E
-    pinfunc = GPIO_PE_A_I2C;
-    pinmuxE |= (pinfunc << 24) | (pinfunc << 28);
-    *pinmuxE_ptr = pinmuxE;
-
-    // Enable by removing clock gate
-    clk81 |= (I2C_CLK81_BIT);
-    *clk81_ptr = clk81;
-
-    // Check that registers actually changed
-    if (!(*clk81_ptr & I2C_CLK81_BIT)) {
-        printf("driver: failed to toggle clock!\n");
-    }
-    if (!(*pinmux5_ptr & (GPIO_PM5_X16 | GPIO_PM5_X17))) {
-        printf("driver: failed to set pinmux5!\n");
-    }
-
-
-    // Initialise fields
-    *m2ctl = *m2ctl & ~(REG_CTRL_MANUAL);   // Disable manual mode
-    *m3ctl = *m3ctl & ~(REG_CTRL_MANUAL);
-    *m2ctl = *m2ctl | (1 << 31);
-    *m3ctl = *m3ctl | (1 << 31);
-    *m2ctl = *m2ctl | (0x142000);   // Set quarter clock delay to default clock speed
-    *m3ctl = *m3ctl | (0x142000);
-    *m2ctl = *m2ctl & ~(REG_CTRL_ACK_IGNORE);   // Disable ACK IGNORE
-    *m3ctl = *m3ctl & ~(REG_CTRL_ACK_IGNORE);
-
-}
 
 void init(void) {
     setupi2c();
@@ -431,8 +490,8 @@ static inline void i2cirq(int bus, int timeout) {
         // FIXME: this is obviously sus
         if (err > 0) {
             // Get read data
-            uint32_t *rreg0 = ctl + 4*I2C_RDATA;
-            uint32_t *rreg1 = rreg0 + sizeof(uint32_t);
+            volatile uint32_t *rreg0 = ctl + 4*I2C_RDATA;
+            volatile uint32_t *rreg1 = rreg0 + sizeof(uint32_t);
 
             // Copy data into return buffer
             for (int i = 0; i < err; i++) {

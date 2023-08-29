@@ -28,22 +28,22 @@ i2c_security_list_t security_list3[I2C_SECURITY_LIST_SZ];
 
 static inline void test() {
     uint8_t cid = 1; // client id
-    uint8_t addr = 0x20; // address
-    i2c_token_t request[12] = {
+    uint8_t addr = 0x24; // address
+    i2c_token_t request[10] = {
         I2C_TK_START,
-        I2C_TK_ADDRW,
-        I2C_TK_DAT,
-        0x01,
-        I2C_TK_DAT,
-        0x02,
-        I2C_TK_DAT,
-        0x03,
-        I2C_TK_STOP,
+        I2C_TK_ADDRR,
+        // I2C_TK_DAT,
+        // 0x01,
+        // I2C_TK_DAT,
+        // 0x02,
+        // I2C_TK_DAT,
+        // 0x03,
+        // I2C_TK_STOP,
         I2C_TK_END,
     };
     sel4cp_dbg_puts("test: allocating req buffer\n");
     // Write 1,2,3 to address 0x20
-    req_buf_ptr_t ret = allocReqBuf(2, 12, request, cid, addr);
+    req_buf_ptr_t ret = allocReqBuf(2, 10, request, cid, addr);
     if (!ret) {
         sel4cp_dbg_puts("test: failed to allocate req buffer\n");
         return;
@@ -74,7 +74,7 @@ void init(void) {
  * there is data to retrieve from the return path.
 */
 static inline void driverNotify(void) {
-
+    test();
 }
 
 

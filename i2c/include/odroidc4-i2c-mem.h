@@ -19,7 +19,7 @@
 // I2C registers are indexed as their memory region + 4*offset.
 // Unless otherwise indicated, all fields are two words long.
 #define I2C_CTRL        (0x0)         // One word
-#define I2C_ADDR        (0x1)         // One word
+#define I2C_ADDRESS     (0x1)         // One word
 #define I2C_TOKEN_LIST  (0x2)   
 #define I2C_WDATA       (0x4)
 #define I2C_RDATA       (0x6)
@@ -36,8 +36,15 @@
 #define REG_CTRL_MAN_S_SDA  BIT(24)
 #define REG_CTRL_MAN_G_SCL  BIT(25)
 #define REG_CTRL_MAN_G_SDA  BIT(26)
+#define REG_CTRL_CNTL_JIC   BIT(31)
 #define REG_CTRL_CLKDIV_SHIFT	12
 #define REG_CTRL_CLKDIV_MASK	((BIT(10) - 1) << REG_CTRL_CLKDIV_SHIFT)
+
+// Addr register fields
+#define REG_ADDR_SCLDELAY_SHFT 16
+#define REG_ADDR_SDAFILTER    BIT(8) | BIT(9) | BIT(10)
+#define REG_ADDR_SCLFILTER    BIT(11) | BIT(12) | BIT(13)
+#define REG_ADDR_SCLDELAY_ENABLE BIT(28)
 
 #define OC4_I2C_TK_END      (0x0)     // END: Terminator for token list, has no meaning to hardware otherwise
 #define OC4_I2C_TK_START    (0x1)     // START: Begin an i2c transfer. Causes master device to capture bus.

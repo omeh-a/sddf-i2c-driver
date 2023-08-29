@@ -8,8 +8,8 @@
 
 #define GPIO_PINMUX_5 0xb5
 #define GPIO_X16_I2C 
-#define GPIO_PM5_X16 BIT(0) | BIT(1) | BIT(2) | BIT(3)
 #define GPIO_PM5_X17 BIT(4) | BIT(5) | BIT(6) | BIT(7)
+#define GPIO_PM5_X18 BIT(8) | BIT(9) | BIT(10) | BIT(11)
 #define GPIO_PM5_X_I2C 1
 
 

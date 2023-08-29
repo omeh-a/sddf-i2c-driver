@@ -6,7 +6,7 @@
 
 #include <Wire.h>
 
-#define I2C_ADDR 0x08
+#define I2C_ADDR 0x20
 
 void setup() {
   Wire.begin(I2C_ADDR);
@@ -22,13 +22,15 @@ void loop() {
 
 void callback() {
   int count = 0;
-  Serial.println("Master has requested packet!")
+  Serial.println("Master has requested packet!");
   while (Wire.available()) {
     char c = Wire.read();
     Serial.print("Echoing ");
-    Serial.prinln(c);
-    Wire.write(c);
+    Serial.println(c);
+    // Wire.write(c);
     count++;
   }
-  Serial.println("Transaction over. Echoed %d bytes.", count);
+  Serial.print("Transaction over. Echoed ");
+  Serial.print(count);
+  Serial.println("bytes.");
 }
