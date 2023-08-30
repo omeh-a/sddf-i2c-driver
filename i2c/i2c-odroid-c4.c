@@ -70,7 +70,7 @@ static inline void getCtrl(ctrl_reg_t *ctrl, int bus) {
     ctrl->man = (ctl & REG_CTRL_MANUAL) ? 1 : 0;
     ctrl->rd_cnt = (ctl & REG_CTRL_RD_CNT) >> 8;
     ctrl->curr_tk = (ctl & REG_CTRL_CURR_TK) >> 4;
-    ctrl->err = (ctl & REG_CTRL_ERROR) ? 1 : 0;
+    ctrl->err = (ctl & REG_CTRL_ERROR);
     ctrl->status = (ctl & REG_CTRL_STATUS) ? 1 : 0;
     ctrl->start = (ctl & REG_CTRL_START) ? 1 : 0;
 }
@@ -99,7 +99,7 @@ static inline void setupi2c(void) {
     volatile uint32_t *pad_bias2_ptr    = ((void*)gpio_mem + GPIO_BIAS_2_EN*4);
     volatile uint32_t *pad_bias5_ptr    = ((void*)gpio_mem + GPIO_BIAS_5_EN*4);
     volatile uint32_t *clk81_ptr        = ((void*)clk + I2C_CLK_OFFSET);
-    printf("Pointers set: \npinmux5_ptr%p\npinmuxE_ptr%p\npad_ds2b_ptr%p\npad_ds5a_ptr%p\npad_bias2_ptr%p\npad_bias5_ptr%p\nclk81_ptr%p\nif_m2%p\nif_m3%p\ngpio%p\n", pinmux5_ptr, pinmuxE_ptr, pad_ds2b_ptr, pad_ds5a_ptr, pad_bias2_ptr, pad_bias5_ptr, clk81_ptr, if_m2, if_m3, gpio_mem);
+    // printf("Pointers set: \npinmux5_ptr%p\npinmuxE_ptr%p\npad_ds2b_ptr%p\npad_ds5a_ptr%p\npad_bias2_ptr%p\npad_bias5_ptr%p\nclk81_ptr%p\nif_m2%p\nif_m3%p\ngpio%p\n", pinmux5_ptr, pinmuxE_ptr, pad_ds2b_ptr, pad_ds5a_ptr, pad_bias2_ptr, pad_bias5_ptr, clk81_ptr, if_m2, if_m3, gpio_mem);
     // Read existing register values
     uint32_t pinmux5 = *pinmux5_ptr;
     uint32_t pinmuxE = *pinmuxE_ptr;
@@ -125,14 +125,14 @@ static inline void setupi2c(void) {
 
     // Set GPIO drive strength
     // m2
-    uint8_t ds = DS_3MA;    // 3 mA
+    uint8_t ds = 3;    // 3 mA
     *pad_ds2b_ptr &= ~(GPIO_DS_2B_X17 | GPIO_DS_2B_X18);
-    *pad_ds2b_ptr |= (ds << GPIO_DS_2B_X17_SHIFT) | 
-                     (ds << GPIO_DS_2B_X18_SHIFT);
+    *pad_ds2b_ptr |= ((ds << GPIO_DS_2B_X17_SHIFT) | 
+                     (ds << GPIO_DS_2B_X18_SHIFT));
     // m3
     *pad_ds5a_ptr &= ~(GPIO_DS_5A_A14 | GPIO_DS_5A_A15);
-    *pad_ds5a_ptr |= (ds << GPIO_DS_5A_A14_SHIFT) | 
-                     (ds << GPIO_DS_5A_A15_SHIFT);
+    *pad_ds5a_ptr |= ((ds << GPIO_DS_5A_A14_SHIFT) | 
+                     (ds << GPIO_DS_5A_A15_SHIFT));
 
 
     // Check register updated
@@ -239,7 +239,7 @@ static inline void setupi2c(void) {
 static inline int i2cGetError(int bus) {
     // Index into ctl register - i2c base + address of appropriate register
     volatile uint32_t ctl = (bus == 2) ? if_m2->ctl : if_m3->ctl;
-    uint8_t err = ctl & 0x80;   // bit 3 -> set if error
+    uint8_t err = ctl & (1 << 3);   // bit 3 -> set if error
     uint8_t rd = ctl & 0xF00; // bits 8-11 -> number of bytes read
     uint8_t tok = ctl & 0xF0; // bits 4-7 -> curr token
 
@@ -265,20 +265,18 @@ static inline int i2cLoadTokens(int bus) {
     }
     COMPILER_MEMORY_FENCE();
     volatile i2c_if_t *interface = (bus == 2) ? if_m2 : if_m3;
-    interface->ctl = interface->ctl & ~0x1;
+    interface->ctl &= ~0x1;
     if (interface->ctl & 0x1) {
         sel4cp_dbg_puts("i2c: failed to clear start bit!\n");
         return -1;
     }
 
     // Load address into address register
-
-
     // Address goes into low 7 bits of address register
     interface->addr = interface->addr & ~(0x7F);
     interface->addr = interface->addr | ((addr << 1) & 0x7f);  // i2c hardware expects that the 7-bit address is shifted left by 1
     // Print address from reg, to validate
-    printf("Address in : 0x%x -- Address stored: 0x%x\n",addr, (interface->addr) & 0x7F);
+    // printf("Address in : 0x%x -- Address stored: 0x%x\n",addr, (interface->addr) & 0x7F);
 
 
     // Load tokens into token registers, data into data registers
@@ -318,6 +316,9 @@ static inline int i2cLoadTokens(int bus) {
                 break;
             case I2C_TK_DAT:
                 odroid_tok = OC4_I2C_TK_DATA;
+                break;
+            case I2C_TK_DATA_END:
+                odroid_tok = OC4_I2C_TK_DATA_END;
                 break;
             case I2C_TK_STOP:
                 odroid_tok = OC4_I2C_TK_STOP;
@@ -432,19 +433,20 @@ static inline void checkBuf(int bus) {
         if (!req) {
             return;   // If request was invalid, run away.
         }
+        ret_buf_ptr_t ret = getRetBuf(bus);
 
-        uint8_t *ret = getRetBuf(bus);
         // Load bookkeeping data into return buffer
         // Set client PD
 
-        // print pointers
-        printf("req: %p\n", req);
-        printf("ret: %p\n", ret);
+        printf("driver: Loading request from client %d on bus %d to address %d\n", req[0], bus, req[1]);
+        printf("ret_data: %p\n", ret);
+        printf("ret %p\n", ret);
 
-        ret[2] = req[0];      // Client PD
+        ret[RET_BUF_CLIENT] = req[0];      // Client PD
         // Set targeted i2c address
-        ret[3] = req[1];      // Address
+        ret[RET_BUF_ADDR] = req[1];      // Address
 
+        printf("ret buf first 4 bytes: %x %x %x %x\n", ret[0], ret[1], ret[2], ret[3]);
         i2c_ifState[bus].current_req = req;
         i2c_ifState[bus].current_req_len = sz - 2;
         i2c_ifState[bus].remaining = sz - 2;    // Ignore client PD and address
@@ -508,21 +510,21 @@ static inline void i2cirq(int bus, int timeout) {
 
     // If error is 0, successful write. If error >0, successful read of err bytes.
     // Prepare to extract data from the interface.
-    ret_buf_ptr_t * ret = i2c_ifState[bus].current_ret;
-
+    ret_buf_ptr_t ret = i2c_ifState[bus].current_ret;
+    printf("IRQ1: ret buf first 4 bytes: %x %x %x %x\n", ret[0], ret[1], ret[2], ret[3]);
+    printf("IRQ: return pointer %p\n", ret);
     // If there was an error, cancel the rest of this transaction and load the
     // error information into the return buffer.
     if (err < 0) {
         sel4cp_dbg_puts("i2c: error!\n");
-        uint8_t code;
-        if (timeout) 
-            code = I2C_ERR_TIMEOUT;
-        else if (err == -I2C_TK_ADDRR)
-            code = I2C_ERR_NOREAD;
-        else
-            code = I2C_ERR_NACK;
-        ret[0] = code;   // Error code
-        ret[1] = -err;   // Token that caused error
+        if (timeout) {
+            ret[RET_BUF_ERR] = I2C_ERR_TIMEOUT;
+        } else if (err == -I2C_TK_ADDRR) {
+            ret[RET_BUF_ERR] = I2C_ERR_NOREAD;
+        } else {
+            ret[RET_BUF_ERR] = I2C_ERR_NACK;
+        }
+        ret[RET_BUF_ERR_TK] = -err;   // Token that caused error
     } else {
         // If there was a read, extract the data from the interface
         // FIXME: this is obviously sus
@@ -535,9 +537,10 @@ static inline void i2cirq(int bus, int timeout) {
             }
         }
 
-        ret[0] = I2C_ERR_OK;    // Error code
-        ret[1] = 0x0;           // Token that caused error
+        ret[RET_BUF_ERR] = I2C_ERR_OK;    // Error code
+        ret[RET_BUF_ERR_TK] = 0x0;           // Token that caused error
     }
+    printf("IRQ2: ret buf first 4 bytes: %x %x %x %x\n", ret[0], ret[1], ret[2], ret[3]);
 
     // If request is completed or there was an error, return data to server and notify.
     if (err < 0 || !i2c_ifState[bus].remaining) {

@@ -8,7 +8,6 @@
 
 // Pinmux
 #define GPIO_PINMUX_5 0xb5
-#define GPIO_X16_I2C 
 #define GPIO_PM5_X17 BIT(4) | BIT(5) | BIT(6) | BIT(7)
 #define GPIO_PM5_X18 BIT(8) | BIT(9) | BIT(10) | BIT(11)
 #define GPIO_PM5_X_I2C 1
@@ -22,8 +21,8 @@
 #define GPIO_DS_2B     0xd3 // M2
 #define GPIO_DS_2B_X17 BIT(3) | BIT(2)
 #define GPIO_DS_2B_X18 BIT(1) | BIT(0)  // Also used for X19, for some reason
-#define GPIO_DS_2B_X17_SHIFT 0
-#define GPIO_DS_2B_X18_SHIFT 2
+#define GPIO_DS_2B_X17_SHIFT 2
+#define GPIO_DS_2B_X18_SHIFT 4
 
 #define GPIO_DS_5A     0xd4 // M3
 #define GPIO_DS_5A_A14 BIT(28) | BIT(29)

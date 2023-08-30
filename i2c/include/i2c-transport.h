@@ -20,6 +20,12 @@
 #define I2C_BUF_SZ 512
 #define I2C_BUF_COUNT 511
 
+// Return buffer
+#define RET_BUF_ERR 0
+#define RET_BUF_ERR_TK 1
+#define RET_BUF_CLIENT 2
+#define RET_BUF_ADDR 3
+
 // Shared memory regions
 extern uintptr_t m2_req_free;
 extern uintptr_t m2_req_used;
@@ -40,8 +46,8 @@ extern ring_handle_t m3RetRing;
 
 // Metadata is encoded differently in returns vs. requests so we
 // have two types for safety.
-typedef uintptr_t ret_buf_ptr_t;
-typedef uintptr_t req_buf_ptr_t;
+typedef volatile uint8_t *ret_buf_ptr_t;
+typedef volatile uint8_t *req_buf_ptr_t;
 
 /**
  * Initialise the transport layer. Sets up shared ring buffers

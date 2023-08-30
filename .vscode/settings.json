@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "i2c-transport.h": "c",
-        "i2c-driver.h": "c"
+        "i2c-driver.h": "c",
+        "stdint.h": "c"
     }
 }

@@ -13,6 +13,7 @@
 #include "i2c-driver.h"
 #include "i2c-token.h"
 #include "sw_shared_ringbuffer.h"
+#include "printf.h"
 #include "i2c-transport.h"
 #include "i2c.h"
 
@@ -38,6 +39,7 @@ static inline void test() {
         0x02,
         I2C_TK_DAT,
         0x03,
+        I2C_TK_DATA_END,
         I2C_TK_STOP,
         I2C_TK_END,
     };
@@ -74,7 +76,34 @@ void init(void) {
  * there is data to retrieve from the return path.
 */
 static inline void driverNotify(void) {
-    test();
+    printf("server: Notified by driver!\n");
+    // Read the return buffer
+    // No way to know which interface generated notification, so we just try all of them
+    for (int i = 2; i < 4; i ++) {
+        if (retBufEmpty(i)) {
+            continue;
+        }
+        size_t *sz;
+        ret_buf_ptr_t ret = popRetBuf(i, &sz);
+        printf("ret buf first 4 bytes: %x %x %x %x\n", ret[0], ret[1], ret[2], ret[3]);
+        printf("server: Got return buffer %p\n", ret);
+        printf("bus = %i client = %i addr = %i sz=%u\n", *(uint8_t *) ret,
+        *(uint8_t *) (ret + sizeof(uint8_t)), *(uint8_t *) (ret + 2*sizeof(uint8_t)),
+        sz);
+
+        uint8_t err = ret[RET_BUF_ERR];
+        uint8_t err_tk = ret[RET_BUF_ERR_TK];
+        uint8_t client = ret[RET_BUF_CLIENT];
+        uint8_t addr = ret[RET_BUF_ADDR];
+
+        if (err) {
+            printf("server: Error %i on bus %i for client %i at token of type %i\n", err, i, client, addr);
+        } else {
+            printf("server: Success on bus %i for client %i at address %i\n", i, client, addr);
+        }
+
+        releaseRetBuf(i, ret);
+    }
 }
 
 
