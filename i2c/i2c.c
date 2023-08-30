@@ -32,13 +32,13 @@ static inline void test() {
     i2c_token_t request[10] = {
         I2C_TK_START,
         I2C_TK_ADDRR,
-        // I2C_TK_DAT,
-        // 0x01,
-        // I2C_TK_DAT,
-        // 0x02,
-        // I2C_TK_DAT,
-        // 0x03,
-        // I2C_TK_STOP,
+        I2C_TK_DAT,
+        0x01,
+        I2C_TK_DAT,
+        0x02,
+        I2C_TK_DAT,
+        0x03,
+        I2C_TK_STOP,
         I2C_TK_END,
     };
     sel4cp_dbg_puts("test: allocating req buffer\n");

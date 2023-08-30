@@ -26,9 +26,12 @@
 typedef volatile struct {
     uint32_t ctl;
     uint32_t addr;
-    uint32_t tk_list[2];
-    uint32_t wdata[2];
-    uint32_t rdata[2];
+    uint32_t tk_list0;
+    uint32_t tk_list1;
+    uint32_t wdata0;
+    uint32_t wdata1;
+    uint32_t rdata0;
+    uint32_t rdata1;
 } i2c_if_t;
 
 // Hardware memory
@@ -112,9 +115,17 @@ static inline void setupi2c(void) {
     pinmuxE |= (pinfunc << 24) | (pinfunc << 28);
     *pinmuxE_ptr = pinmuxE;
 
+    // Check that registers actually changed
+    if (!(*pinmux5_ptr & (GPIO_PM5_X18 | GPIO_PM5_X17))) {
+        printf("driver: failed to set pinmux5!\n");
+    }
+    if (!(*pinmuxE_ptr & (GPIO_PE_A15 | GPIO_PE_A14))) {
+        printf("driver: failed to set pinmuxE!\n");
+    }
+
     // Set GPIO drive strength
     // m2
-    uint8_t ds = DS_3MA;
+    uint8_t ds = DS_3MA;    // 3 mA
     *pad_ds2b_ptr &= ~(GPIO_DS_2B_X17 | GPIO_DS_2B_X18);
     *pad_ds2b_ptr |= (ds << GPIO_DS_2B_X17_SHIFT) | 
                      (ds << GPIO_DS_2B_X18_SHIFT);
@@ -123,9 +134,28 @@ static inline void setupi2c(void) {
     *pad_ds5a_ptr |= (ds << GPIO_DS_5A_A14_SHIFT) | 
                      (ds << GPIO_DS_5A_A15_SHIFT);
 
+
+    // Check register updated
+    if ((*pad_ds2b_ptr & (GPIO_DS_2B_X17 | GPIO_DS_2B_X18)) != ((ds << GPIO_DS_2B_X17_SHIFT) | 
+                     (ds << GPIO_DS_2B_X18_SHIFT))) {
+        printf("driver: failed to set drive strength for m2!\n");
+    }
+    if ((*pad_ds5a_ptr & (GPIO_DS_5A_A14 | GPIO_DS_5A_A15)) != ((ds << GPIO_DS_5A_A14_SHIFT) | 
+                     (ds << GPIO_DS_5A_A15_SHIFT))) {
+        printf("driver: failed to set drive strength for m3!\n");
+    }
+
     // Disable bias, because the i2c hardware has undocumented internal ones
-    *pad_bias2_ptr &= ~((1 << 18) | (1 << 17)); // Disable m2 bias
-    *pad_bias5_ptr &= ~((1 << 14) | (1 << 15)); // Disable m3 bias 
+    *pad_bias2_ptr &= ~((1 << 18) | (1 << 17)); // Disable m2 bias - x17 and x18
+    *pad_bias5_ptr &= ~((1 << 14) | (1 << 15)); // Disable m3 bias - a14 and a15
+
+    // Check registers updated
+    if ((*pad_bias2_ptr & ((1 << 18) | (1 << 17))) != 0) {
+        printf("driver: failed to disable bias for m2!\n");
+    }
+    if ((*pad_bias5_ptr & ((1 << 14) | (1 << 15))) != 0) {
+        printf("driver: failed to disable bias for m3!\n");
+    }
 
     // Enable by removing clock gate
     clk81 |= (I2C_CLK81_BIT);
@@ -177,14 +207,14 @@ static inline void setupi2c(void) {
     // Set SCL filtering
     if_m2->addr &= ~(REG_ADDR_SCLFILTER);
     if_m3->addr &= ~(REG_ADDR_SCLFILTER);
-    if_m2->addr |= (0x3 << 11);
-    if_m3->addr |= (0x3 << 11);
+    if_m2->addr |= (0x0 << 11);
+    if_m3->addr |= (0x0 << 11);
 
     // Set SDA filtering
     if_m2->addr &= ~(REG_ADDR_SDAFILTER);
     if_m3->addr &= ~(REG_ADDR_SDAFILTER);
-    if_m2->addr |= (0x3 << 8);
-    if_m3->addr |= (0x3 << 8);
+    if_m2->addr |= (0x0 << 8);
+    if_m3->addr |= (0x0 << 8);
 
     // Set clock delay levels
     // Field has 9 bits: clear then shift in div_l
@@ -258,10 +288,10 @@ static inline int i2cLoadTokens(int bus) {
     int num_tokens = i2c_ifState[bus].current_req_len;
 
     // Clear token buffer registers
-    interface->tk_list[0] = 0x0;
-    interface->tk_list[1] = 0x0;
-    interface->wdata[0] = 0x0;
-    interface->wdata[1] = 0x0;
+    interface->tk_list0 = 0x0;
+    interface->tk_list1 = 0x0;
+    interface->wdata0 = 0x0;
+    interface->wdata1 = 0x0;
     uint32_t tk_offset = 0;
     uint32_t wdat_offset = 0;
 
@@ -299,24 +329,24 @@ static inline int i2cLoadTokens(int bus) {
         printf("Loading token %d: %d\n", i, odroid_tok);
 
         if (tk_offset < 8) {
-            interface->tk_list[0] |= ((odroid_tok & 0xF) << (tk_offset * 4));
+            interface->tk_list0 |= ((odroid_tok & 0xF) << (tk_offset * 4));
             // printf("(odroid_tok << (tk_offset * 4)) == 0x%x\n", (odroid_tok << (tk_offset * 4)));
-            // printf("Token %d: %x\n", i, (interface->tk_list[0] >> (tk_offset * 4)) & 0xF);
-            // printf("Raw: 0x%x\n", interface->tk_list[0]);
+            // printf("Token %d: %x\n", i, (interface->tk_list0 >> (tk_offset * 4)) & 0xF);
+            // printf("Raw: 0x%x\n", interface->tk_list0);
             tk_offset++;
         } else {
-            interface->tk_list[1] = interface->tk_list[1] | (odroid_tok << ((tk_offset -8) * 4));
-            // printf("Token %d: %x\n", i, (interface->tk_list[1] >> ((tk_offset - 8) * 4)) & 0xF);
-            // printf("Raw: 0x%x\n", interface->tk_list[1]);
+            interface->tk_list1 = interface->tk_list1 | (odroid_tok << ((tk_offset -8) * 4));
+            // printf("Token %d: %x\n", i, (interface->tk_list1 >> ((tk_offset - 8) * 4)) & 0xF);
+            // printf("Raw: 0x%x\n", interface->tk_list1);
             tk_offset++;
         }
         // If data token and we are writing, load data into wbuf registers
         if (odroid_tok == OC4_I2C_TK_DATA && !i2c_ifState[bus].ddr) {
             if (wdat_offset < 4) {
-                interface->wdata[0] = interface->wdata[0] | (tokens[2 + i + 1] << (wdat_offset * 8));
+                interface->wdata0 = interface->wdata0 | (tokens[2 + i + 1] << (wdat_offset * 8));
                 wdat_offset++;
             } else {
-                interface->wdata[1] = interface->wdata[1] | (tokens[2 + i + 1] << ((wdat_offset - 4) * 8));
+                interface->wdata1 = interface->wdata1 | (tokens[2 + i + 1] << ((wdat_offset - 4) * 8));
                 wdat_offset++;
             }
             // Since we grabbed the next token in the chain, increment offset
@@ -327,17 +357,17 @@ static inline int i2cLoadTokens(int bus) {
     // Sanity check: iterate over hardware lists to make sure they were set appropriately
     for (int i = 0; i < 16; i++) {
         if (i < 8) {
-            printf("Token %d: %x\n", i, (interface->tk_list[0] >> (i * 4)) & 0xF);
+            printf("Token %d: %x\n", i, (interface->tk_list0 >> (i * 4)) & 0xF);
         } else {
-            printf("Token %d: %x\n", i, (interface->tk_list[1] >> ((i - 8) * 4)) & 0xF);
+            printf("Token %d: %x\n", i, (interface->tk_list1 >> ((i - 8) * 4)) & 0xF);
         }
     }
 
     for (int i = 0; i < 8; i++) {
         if (i < 4) {
-            printf("Wdata %d: %x\n", i, (interface->wdata[0] >> (i * 8)) & 0xFF);
+            printf("Wdata %d: %x\n", i, (interface->wdata0 >> (i * 8)) & 0xFF);
         } else {
-            printf("Wdata %d: %x\n", i, (interface->wdata[1] >> ((i - 4) * 8)) & 0xFF);
+            printf("Wdata %d: %x\n", i, (interface->wdata1 >> ((i - 4) * 8)) & 0xFF);
         }
     }
 
@@ -501,7 +531,7 @@ static inline void i2cirq(int bus, int timeout) {
 
             // Copy data into return buffer
             for (int i = 0; i < err; i++) {
-                ret[4+i] = (uint8_t)((interface->rdata[i] & 0xFF000000) >> 24);
+                ret[4+i] = (uint8_t)((interface->rdata0 & 0xFF000000) >> 24);
             }
         }
 
