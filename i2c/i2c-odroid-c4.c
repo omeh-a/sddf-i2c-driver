@@ -87,10 +87,16 @@ i2c_ifState_t i2c_ifState[4];
 static inline void setupi2c(void) {
     printf("driver: initialising i2c master interfaces...\n");
     // Set up pinmux
-    volatile uint32_t *pinmux5_ptr = (volatile uint32_t *)(gpio + GPIO_OFFSET + GPIO_PINMUX_5 * 4);
-    volatile uint32_t *pinmuxE_ptr = (volatile uint32_t *)(gpio + GPIO_OFFSET + GPIO_PINMUX_E * 4);
-    volatile uint32_t *clk81_ptr = (volatile uint32_t *)(clk + I2C_CLK_OFFSET);
+    volatile uint32_t *gpio_mem = (void*)(gpio + GPIO_OFFSET);
 
+    volatile uint32_t *pinmux5_ptr      = ((void*)gpio_mem + GPIO_PINMUX_5*4);
+    volatile uint32_t *pinmuxE_ptr      = ((void*)gpio_mem + GPIO_PINMUX_E*4);
+    volatile uint32_t *pad_ds2b_ptr     = ((void*)gpio_mem + GPIO_DS_2B*4);
+    volatile uint32_t *pad_ds5a_ptr     = ((void*)gpio_mem + GPIO_DS_5A*4);
+    volatile uint32_t *pad_bias2_ptr    = ((void*)gpio_mem + GPIO_BIAS_2_EN*4);
+    volatile uint32_t *pad_bias5_ptr    = ((void*)gpio_mem + GPIO_BIAS_5_EN*4);
+    volatile uint32_t *clk81_ptr        = ((void*)clk + I2C_CLK_OFFSET);
+    printf("Pointers set: \npinmux5_ptr%p\npinmuxE_ptr%p\npad_ds2b_ptr%p\npad_ds5a_ptr%p\npad_bias2_ptr%p\npad_bias5_ptr%p\nclk81_ptr%p\nif_m2%p\nif_m3%p\ngpio%p\n", pinmux5_ptr, pinmuxE_ptr, pad_ds2b_ptr, pad_ds5a_ptr, pad_bias2_ptr, pad_bias5_ptr, clk81_ptr, if_m2, if_m3, gpio_mem);
     // Read existing register values
     uint32_t pinmux5 = *pinmux5_ptr;
     uint32_t pinmuxE = *pinmuxE_ptr;
@@ -105,6 +111,21 @@ static inline void setupi2c(void) {
     pinfunc = GPIO_PE_A_I2C;
     pinmuxE |= (pinfunc << 24) | (pinfunc << 28);
     *pinmuxE_ptr = pinmuxE;
+
+    // Set GPIO drive strength
+    // m2
+    uint8_t ds = DS_3MA;
+    *pad_ds2b_ptr &= ~(GPIO_DS_2B_X17 | GPIO_DS_2B_X18);
+    *pad_ds2b_ptr |= (ds << GPIO_DS_2B_X17_SHIFT) | 
+                     (ds << GPIO_DS_2B_X18_SHIFT);
+    // m3
+    *pad_ds5a_ptr &= ~(GPIO_DS_5A_A14 | GPIO_DS_5A_A15);
+    *pad_ds5a_ptr |= (ds << GPIO_DS_5A_A14_SHIFT) | 
+                     (ds << GPIO_DS_5A_A15_SHIFT);
+
+    // Disable bias, because the i2c hardware has undocumented internal ones
+    *pad_bias2_ptr &= ~((1 << 18) | (1 << 17)); // Disable m2 bias
+    *pad_bias5_ptr &= ~((1 << 14) | (1 << 15)); // Disable m3 bias 
 
     // Enable by removing clock gate
     clk81 |= (I2C_CLK81_BIT);
@@ -122,13 +143,10 @@ static inline void setupi2c(void) {
     // Initialise fields
     if_m2->ctl = if_m2->ctl & ~(REG_CTRL_MANUAL);   // Disable manual mode
     if_m3->ctl = if_m3->ctl & ~(REG_CTRL_MANUAL);
-
-    if_m2->ctl = if_m2->ctl | ((uint8_t)322 << REG_CTRL_CLKDIV_SHIFT);   // Set quarter clock delay to default clock speed
-    if_m3->ctl = if_m3->ctl | ((uint8_t)322 << REG_CTRL_CLKDIV_SHIFT);
     if_m2->ctl = if_m2->ctl & ~(REG_CTRL_ACK_IGNORE);   // Disable ACK IGNORE
     if_m3->ctl = if_m3->ctl & ~(REG_CTRL_ACK_IGNORE);
-    // if_m2->ctl = if_m2->ctl | (REG_CTRL_CNTL_JIC);      // Bypass dynamic clock gating
-    // if_m3->ctl = if_m3->ctl | (REG_CTRL_CNTL_JIC);
+    if_m2->ctl = if_m2->ctl | (REG_CTRL_CNTL_JIC);      // Bypass dynamic clock gating
+    if_m3->ctl = if_m3->ctl | (REG_CTRL_CNTL_JIC);
 
     // Handle clocking
     // Stolen from Linux Kernel's amlogic driver
@@ -159,14 +177,14 @@ static inline void setupi2c(void) {
     // Set SCL filtering
     if_m2->addr &= ~(REG_ADDR_SCLFILTER);
     if_m3->addr &= ~(REG_ADDR_SCLFILTER);
-    if_m2->addr |= (0x7 << 11);
-    if_m3->addr |= (0x7 << 11);
+    if_m2->addr |= (0x3 << 11);
+    if_m3->addr |= (0x3 << 11);
 
     // Set SDA filtering
     if_m2->addr &= ~(REG_ADDR_SDAFILTER);
     if_m3->addr &= ~(REG_ADDR_SDAFILTER);
-    if_m2->addr |= (0x7 << 8);
-    if_m3->addr |= (0x7 << 8);
+    if_m2->addr |= (0x3 << 8);
+    if_m3->addr |= (0x3 << 8);
 
     // Set clock delay levels
     // Field has 9 bits: clear then shift in div_l
