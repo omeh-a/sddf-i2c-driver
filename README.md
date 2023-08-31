@@ -2,6 +2,23 @@
 
 This repo contains an i2c (inter-integrated-circuit) driver for the ODROID C4 Single Board Computer built over the seL4 Device Driver Framework. This repo is structured to be as generic as possible for future extension to other devices.
 
+# THIS REPO HAS BEEN SUPERCEDED
+
+Please see https://github.com/omeh-a/sDDF/tree/meson-i2c
+
+
+
+
+
+
+
+
+
+
+-----------------------
+
+
+
 The initial scope of this driver is to supply an interface to the EE domain i2c controllers on the c4. The ODROID has four interfaces:
 
 * M0: AO or EE domain
