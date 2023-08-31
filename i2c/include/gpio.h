@@ -1,5 +1,14 @@
+/*
+ * Copyright 2023, UNSW
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
 
-
+// gpio.h
+// Header for the ODROID C4's GPIO system. This should be replaced by a full
+// generic GPIO driver in the sDDF in the future.
+// Matt Rossouw (matthew.rossouw@unsw.edu.au)
+// 08/2023
 
 #ifndef __GPIO_H__
 #define __GPIO_H__

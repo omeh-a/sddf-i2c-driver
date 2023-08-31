@@ -6,13 +6,13 @@
 
 #include <Wire.h>
 
-#define I2C_ADDR 0x20
+#define I2C_ADDR 0x24
 
 void setup() {
+  Serial.begin(115200);
+  Serial.println("I2C Tester started");
   Wire.begin(I2C_ADDR);
   Wire.onReceive(callback);
-  Serial.begin(9600);
-  Serial.println("I2C Tester started");
 }
 
 
@@ -20,7 +20,7 @@ void loop() {
   delay(50);
 }
 
-void callback() {
+void callback(int caller) {
   int count = 0;
   Serial.println("Master has requested packet!");
   while (Wire.available()) {

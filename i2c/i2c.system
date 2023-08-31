@@ -30,7 +30,7 @@
     <memory_region name="client_ret_used" size="0x200_000" page_size="0x200_000"/>
 
     <!-- Main protection domain - i2c server -->
-    <protection_domain name="i2c_server" priority="205">
+    <protection_domain name="i2c_server" priority="200">
         <program_image path="i2c.elf"/>
 
         <!-- Server <=> driver buffers -->

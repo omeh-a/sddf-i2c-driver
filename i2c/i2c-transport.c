@@ -66,11 +66,12 @@ void i2cTransportInit(int buffer_init) {
 
 
 req_buf_ptr_t allocReqBuf(int bus, size_t size, uint8_t *data, uint8_t client, uint8_t addr) {
-    sel4cp_dbg_puts("transport: Allocating request buffer\n");
+    // sel4cp_dbg_puts("transport: Allocating request buffer\n");
     if (bus != 2 && bus != 3) {
         return 0;
     }
     if (size > I2C_BUF_SZ - 2*sizeof(i2c_token_t)) {
+        printf("transport: Requested buffer size %zu too large\n", size);
         return 0;
     }
     
@@ -112,7 +113,7 @@ req_buf_ptr_t allocReqBuf(int bus, size_t size, uint8_t *data, uint8_t client, u
 }
 
 ret_buf_ptr_t getRetBuf(int bus) {
-    sel4cp_dbg_puts("transport: Getting return buffer\n");
+    // sel4cp_dbg_puts("transport: Getting return buffer\n");
     if (bus != 2 && bus != 3) {
         return 0;
     }
@@ -137,7 +138,7 @@ ret_buf_ptr_t getRetBuf(int bus) {
 }
 
 int pushRetBuf(int bus, ret_buf_ptr_t buf, size_t size) {
-    sel4cp_dbg_puts("transport: pushign return buffer\n");
+    // sel4cp_dbg_puts("transport: pushign return buffer\n");
     if (bus != 2 && bus != 3) {
         return 0;
     }
@@ -164,13 +165,13 @@ int pushRetBuf(int bus, ret_buf_ptr_t buf, size_t size) {
 static inline uintptr_t popBuf(ring_handle_t *ring, size_t *sz) {
     uintptr_t buf;
     int ret = dequeue_used(ring, &buf, sz);
-    printf("Popping buffer containing %u bytes\n", *sz);
+    printf("Popping buffer containing %zu bytes\n", *sz);
     if (ret != 0) return 0;
     return buf;
 } 
 
 req_buf_ptr_t popReqBuf(int bus, size_t *size) {
-    sel4cp_dbg_puts("transport: popping request buffer\n");
+    // sel4cp_dbg_puts("transport: popping request buffer\n");
     if (bus != 2 && bus != 3) {
         return 0;
     }
@@ -187,7 +188,7 @@ req_buf_ptr_t popReqBuf(int bus, size_t *size) {
 
 
 ret_buf_ptr_t popRetBuf(int bus, size_t *size) {
-    sel4cp_dbg_puts("transport: popping return buffer\n");
+    // sel4cp_dbg_puts("transport: popping return buffer\n");
     if (bus != 2 && bus != 3) {
         return 0;
     }
@@ -233,7 +234,7 @@ int reqBufEmpty(int bus) {
 
 
 int releaseReqBuf(int bus, req_buf_ptr_t buf) {
-    sel4cp_dbg_puts("transport: releasing request buffer\n");
+    // sel4cp_dbg_puts("transport: releasing request buffer\n");
     if (bus != 2 && bus != 3) {
         return 0;
     }
@@ -258,7 +259,7 @@ int releaseReqBuf(int bus, req_buf_ptr_t buf) {
 }
 
 int releaseRetBuf(int bus, ret_buf_ptr_t buf) {
-    sel4cp_dbg_puts("transport: releasing return buffer\n");
+    // sel4cp_dbg_puts("transport: releasing return buffer\n");
     if (bus != 2 && bus != 3) {
         return 0;
     }
